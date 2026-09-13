@@ -157,6 +157,7 @@ function App() {
             <button className={activeView === 'marketplace' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('marketplace')}>Tienda</button>
             <button className={activeView === 'appointments' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('appointments')}>Citas</button>
             <button className={activeView === 'adoptions' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('adoptions')}>Adopciones</button>
+            <button className={activeView === 'maps' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('maps')}>Mapa</button>
           </nav>
           <span className="user-pill">{profile?.displayName || 'Mi perfil'}</span>
           <button className="button button-ghost" type="button" onClick={logout}>Salir</button>
@@ -171,6 +172,8 @@ function App() {
           ? <AppointmentsView token={token} pets={pets} onError={handleError} />
         : activeView === 'adoptions'
           ? <AdoptionsView token={token} role={getTokenRole(token)} onError={handleError} />
+        : activeView === 'maps'
+          ? <MapsView token={token} onError={handleError} />
         : <div className="content-grid">
         <aside className="sidebar">
           <section className="side-card profile-card">
@@ -236,6 +239,52 @@ function App() {
         </div>}
     </main>
   )
+}
+
+function MapsView({ token, onError }) {
+  const [clinics, setClinics] = useState([])
+  const [location, setLocation] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    marketplaceApi.clinics(token)
+      .then(setClinics)
+      .catch(onError)
+      .finally(() => setLoading(false))
+    navigator.geolocation?.getCurrentPosition(
+      (position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+    )
+  }, [onError, token])
+
+  const sortedClinics = [...clinics].sort((left, right) => distanceFrom(location, left) - distanceFrom(location, right))
+  const mapClinic = sortedClinics[0]
+  const mapUrl = mapClinic
+    ? `https://www.google.com/maps/search/?api=1&query=${mapClinic.latitude},${mapClinic.longitude}`
+    : 'https://www.google.com/maps'
+
+  return (
+    <section className="maps-layout">
+      <div className="maps-main">
+        <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MAPA</p><h2>Veterinarias cerca de ti.</h2><p className="marketplace-intro">Activa tu ubicación para ordenar los resultados por cercanía.</p></div><button className="button button-secondary" type="button" onClick={() => navigator.geolocation?.getCurrentPosition((position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }))}>Usar mi ubicación</button></div>
+        <div className="map-card card"><div className="map-placeholder"><span>GOOGLE MAPS</span><strong>{mapClinic ? mapClinic.name : 'Selecciona una veterinaria'}</strong><p>{mapClinic ? `${mapClinic.latitude.toFixed(4)}, ${mapClinic.longitude.toFixed(4)}` : 'Las ubicaciones aparecerán aquí.'}</p><a className="button button-primary" href={mapUrl} target="_blank" rel="noreferrer">Abrir en Google Maps</a></div></div>
+      </div>
+      <aside className="clinic-list card"><div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>{loading && <p className="muted">Cargando ubicaciones...</p>}{!loading && !clinics.length && <p className="muted">Aún no hay veterinarias registradas.</p>}{sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.google.com/maps/search/?api=1&query=${clinic.latitude},${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span>{formatDistance(distanceFrom(location, clinic))}</span></a>)}</aside>
+    </section>
+  )
+}
+
+function distanceFrom(location, clinic) {
+  if (!location) return Number.MAX_SAFE_INTEGER
+  const earthRadius = 6371
+  const latitudeDelta = (clinic.latitude - location.latitude) * Math.PI / 180
+  const longitudeDelta = (clinic.longitude - location.longitude) * Math.PI / 180
+  const latitude = location.latitude * Math.PI / 180
+  const value = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(latitude) * Math.cos(clinic.latitude * Math.PI / 180) * Math.sin(longitudeDelta / 2) ** 2
+  return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
+}
+
+function formatDistance(distance) {
+  return Number.isFinite(distance) ? `${distance.toFixed(1)} km` : 'Distancia n/d'
 }
 
 function AdoptionsView({ token, role, onError }) {
