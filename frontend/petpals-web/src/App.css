@@ -138,6 +138,18 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
 .appointment-row { display: grid; gap: 5px; padding: 16px 0; border-top: 1px solid var(--line); }
 .appointment-row span, .appointment-row small { color: var(--muted); }
 .appointment-row em { color: var(--accent); font-size: 12px; font-style: normal; text-transform: uppercase; }
+.adoptions-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; max-width: 1180px; margin: 0 auto; }
+.adoption-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.adoption-card { min-height: 260px; padding: 22px; display: flex; align-items: flex-end; background: linear-gradient(145deg, #e5f0df, #fff); }
+.adoption-info { display: grid; gap: 8px; width: 100%; }
+.adoption-info h3 { font-size: 28px; margin: 0; }
+.adoption-info p { margin: 0; color: var(--muted); }
+.adoption-info .button { margin-top: 8px; }
+.adoption-side { display: grid; align-content: start; gap: 12px; height: fit-content; padding: 22px; }
+.adoption-side textarea, .publish-form { width: 100%; }
+.request-row { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
+.request-row span, .request-row small { color: var(--muted); }
+.publish-form { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 
 @media (max-width: 850px) {
   .content-grid { grid-template-columns: 1fr; gap: 22px; }
@@ -145,6 +157,8 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
   .auth-shell { grid-template-columns: 1fr; }
   .marketplace-layout { grid-template-columns: 1fr; }
   .appointments-layout { grid-template-columns: 1fr; }
+  .adoptions-layout { grid-template-columns: 1fr; }
+  .adoption-grid { grid-template-columns: 1fr; }
   .cart-panel { position: static; }
   .auth-visual { min-height: 360px; padding: 28px; }
   .auth-slogan { margin: 70px 0 40px; font-size: 58px; }

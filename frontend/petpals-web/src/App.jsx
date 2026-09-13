@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { appointmentsApi, authApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
+import { adoptionApi, appointmentsApi, authApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
 import './App.css'
 
 function App() {
@@ -156,6 +156,7 @@ function App() {
             <button className={activeView === 'feed' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('feed')}>Feed</button>
             <button className={activeView === 'marketplace' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('marketplace')}>Tienda</button>
             <button className={activeView === 'appointments' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('appointments')}>Citas</button>
+            <button className={activeView === 'adoptions' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('adoptions')}>Adopciones</button>
           </nav>
           <span className="user-pill">{profile?.displayName || 'Mi perfil'}</span>
           <button className="button button-ghost" type="button" onClick={logout}>Salir</button>
@@ -168,6 +169,8 @@ function App() {
         ? <MarketplaceView token={token} role={getTokenRole(token)} onError={handleError} />
         : activeView === 'appointments'
           ? <AppointmentsView token={token} pets={pets} onError={handleError} />
+        : activeView === 'adoptions'
+          ? <AdoptionsView token={token} role={getTokenRole(token)} onError={handleError} />
         : <div className="content-grid">
         <aside className="sidebar">
           <section className="side-card profile-card">
@@ -232,6 +235,57 @@ function App() {
         </section>
         </div>}
     </main>
+  )
+}
+
+function AdoptionsView({ token, role, onError }) {
+  const [pets, setPets] = useState([])
+  const [requests, setRequests] = useState([])
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [petForm, setPetForm] = useState({ name: '', species: '', breed: '', approximateAge: '', description: '' })
+
+  useEffect(() => {
+    Promise.all([adoptionApi.pets(token), adoptionApi.requests(token)])
+      .then(([nextPets, nextRequests]) => {
+        setPets(nextPets)
+        setRequests(nextRequests)
+      })
+      .catch(onError)
+      .finally(() => setLoading(false))
+  }, [onError, token])
+
+  async function requestAdoption(petId) {
+    try {
+      const request = await adoptionApi.request(token, petId, message)
+      setRequests((current) => [request, ...current])
+      setMessage('')
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function publishPet(event) {
+    event.preventDefault()
+    try {
+      const pet = await adoptionApi.createPet(token, petForm)
+      setPets((current) => [pet, ...current])
+      setPetForm({ name: '', species: '', breed: '', approximateAge: '', description: '' })
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  return (
+    <section className="adoptions-layout">
+      <div className="adoptions-main">
+        <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / ADOPCIONES</p><h2>Encuentra un nuevo compañero.</h2><p className="marketplace-intro">Conoce animales publicados por refugios de la comunidad.</p></div></div>
+        {loading && <div className="card loading-card">Cargando animales...</div>}
+        {!loading && !pets.length && <div className="card empty-card"><h2>No hay animales disponibles</h2><p>Vuelve más tarde para conocer nuevas historias.</p></div>}
+        <div className="adoption-grid">{pets.map((pet) => <article className="adoption-card card" key={pet.id}><div className="adoption-info"><p className="eyebrow">{pet.shelterName}</p><h3>{pet.name}</h3><p>{pet.species}{pet.breed ? ` · ${pet.breed}` : ''}{pet.approximateAge ? ` · ${pet.approximateAge}` : ''}</p><p>{pet.description || 'Este animal busca un hogar responsable.'}</p>{pet.vaccinations?.length > 0 && <small>{pet.vaccinations.length} vacuna(s) registradas</small>}<button className="button button-primary" type="button" onClick={() => requestAdoption(pet.id)}>Solicitar adopción</button></div></article>)}</div>
+      </div>
+      <aside className="adoption-side card"><p className="eyebrow">MI SOLICITUD</p><textarea placeholder="Mensaje para el refugio..." value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} />{requests.map((request) => <div className="request-row" key={request.id}><strong>{request.petName}</strong><span>{request.status}</span><small>{request.applicantMessage || 'Sin mensaje'}</small></div>)}{role === 'Shelter' && <form className="publish-form" onSubmit={publishPet}><p className="eyebrow">PUBLICAR ANIMAL</p><input required placeholder="Nombre" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} /><input required placeholder="Especie" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })} /><input placeholder="Raza" value={petForm.breed} onChange={(event) => setPetForm({ ...petForm, breed: event.target.value })} /><input placeholder="Edad aproximada" value={petForm.approximateAge} onChange={(event) => setPetForm({ ...petForm, approximateAge: event.target.value })} /><textarea placeholder="Descripción" value={petForm.description} onChange={(event) => setPetForm({ ...petForm, description: event.target.value })} /><button className="button button-secondary" type="submit">Publicar</button></form>}</aside>
+    </section>
   )
 }
 

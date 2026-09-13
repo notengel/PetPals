@@ -122,3 +122,18 @@ export const appointmentsApi = {
     token,
   }),
 }
+
+export const adoptionApi = {
+  pets: (token) => apiRequest('/adoptions/pets', { token }),
+  requests: (token) => apiRequest('/adoptions/requests/mine', { token }),
+  request: (token, petId, applicantMessage) => apiRequest(`/adoptions/pets/${petId}/requests`, {
+    method: 'POST',
+    body: JSON.stringify({ applicantMessage }),
+    token,
+  }),
+  createPet: (token, body) => apiRequest('/adoptions/pets', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    token,
+  }),
+}
