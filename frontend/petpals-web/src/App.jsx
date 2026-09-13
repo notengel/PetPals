@@ -10,7 +10,7 @@ function App() {
   const [posts, setPosts] = useState([])
   const [comments, setComments] = useState({})
   const [authMode, setAuthMode] = useState('login')
-  const [authForm, setAuthForm] = useState({ email: '', password: '', displayName: '' })
+  const [authForm, setAuthForm] = useState({ email: '', password: '', displayName: '', role: 'User' })
   const [postText, setPostText] = useState('')
   const [selectedPet, setSelectedPet] = useState('')
   const [petForm, setPetForm] = useState({ name: '', species: '' })
@@ -44,7 +44,7 @@ function App() {
 
     try {
       const body = authMode === 'register'
-        ? { ...authForm, role: 'User' }
+        ? authForm
         : { email: authForm.email, password: authForm.password }
       const response = await (authMode === 'register' ? authApi.register(body) : authApi.login(body))
       storeToken(response.accessToken)
@@ -171,7 +171,7 @@ function App() {
       {activeView === 'marketplace'
         ? <MarketplaceView token={token} role={getTokenRole(token)} onError={handleError} />
         : activeView === 'appointments'
-          ? <AppointmentsView token={token} pets={pets} onError={handleError} />
+          ? getTokenRole(token) === 'Clinic' ? <ClinicAppointmentsView token={token} onError={handleError} /> : <AppointmentsView token={token} pets={pets} onError={handleError} />
         : activeView === 'adoptions'
           ? <AdoptionsView token={token} role={getTokenRole(token)} onError={handleError} />
         : activeView === 'maps'
@@ -323,6 +323,7 @@ function MapsView({ token, onError }) {
 
   const sortedClinics = [...clinics].sort((left, right) => distanceFrom(location, left) - distanceFrom(location, right))
   const mapClinic = sortedClinics[0]
+  const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   const mapUrl = mapClinic
     ? `https://www.google.com/maps/search/?api=1&query=${mapClinic.latitude},${mapClinic.longitude}`
     : 'https://www.google.com/maps'
@@ -331,7 +332,7 @@ function MapsView({ token, onError }) {
     <section className="maps-layout">
       <div className="maps-main">
         <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MAPA</p><h2>Veterinarias cerca de ti.</h2><p className="marketplace-intro">Activa tu ubicación para ordenar los resultados por cercanía.</p></div><button className="button button-secondary" type="button" onClick={() => navigator.geolocation?.getCurrentPosition((position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }))}>Usar mi ubicación</button></div>
-        <div className="map-card card"><div className="map-placeholder"><span>GOOGLE MAPS</span><strong>{mapClinic ? mapClinic.name : 'Selecciona una veterinaria'}</strong><p>{mapClinic ? `${mapClinic.latitude.toFixed(4)}, ${mapClinic.longitude.toFixed(4)}` : 'Las ubicaciones aparecerán aquí.'}</p><a className="button button-primary" href={mapUrl} target="_blank" rel="noreferrer">Abrir en Google Maps</a></div></div>
+        <div className="map-card card">{mapsKey && mapClinic ? <iframe title="Mapa de veterinarias" src={`https://www.google.com/maps/embed/v1/place?key=${mapsKey}&q=${mapClinic.latitude},${mapClinic.longitude}`} loading="lazy" /> : <div className="map-placeholder"><span>GOOGLE MAPS</span><strong>{mapClinic ? mapClinic.name : 'Selecciona una veterinaria'}</strong><p>{mapsKey ? 'No hay veterinarias para mostrar.' : 'Configura VITE_GOOGLE_MAPS_API_KEY para mostrar el mapa integrado.'}</p><a className="button button-primary" href={mapUrl} target="_blank" rel="noreferrer">Abrir en Google Maps</a></div>}</div>
       </div>
       <aside className="clinic-list card"><div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>{loading && <p className="muted">Cargando ubicaciones...</p>}{!loading && !clinics.length && <p className="muted">Aún no hay veterinarias registradas.</p>}{sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.google.com/maps/search/?api=1&query=${clinic.latitude},${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span>{formatDistance(distanceFrom(location, clinic))}</span></a>)}</aside>
     </section>
@@ -360,14 +361,14 @@ function AdoptionsView({ token, role, onError }) {
   const [petForm, setPetForm] = useState({ name: '', species: '', breed: '', approximateAge: '', description: '' })
 
   useEffect(() => {
-    Promise.all([adoptionApi.pets(token), adoptionApi.requests(token)])
+    Promise.all([adoptionApi.pets(token), role === 'Shelter' ? adoptionApi.shelterRequests(token) : adoptionApi.requests(token)])
       .then(([nextPets, nextRequests]) => {
         setPets(nextPets)
         setRequests(nextRequests)
       })
       .catch(onError)
       .finally(() => setLoading(false))
-  }, [onError, token])
+  }, [onError, role, token])
 
   async function requestAdoption(petId) {
     try {
@@ -390,6 +391,15 @@ function AdoptionsView({ token, role, onError }) {
     }
   }
 
+  async function reviewRequest(requestId, status) {
+    try {
+      const request = await adoptionApi.updateRequest(token, requestId, status)
+      setRequests((current) => current.map((item) => item.id === request.id ? request : item))
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
   return (
     <section className="adoptions-layout">
       <div className="adoptions-main">
@@ -398,7 +408,7 @@ function AdoptionsView({ token, role, onError }) {
         {!loading && !pets.length && <div className="card empty-card"><h2>No hay animales disponibles</h2><p>Vuelve más tarde para conocer nuevas historias.</p></div>}
         <div className="adoption-grid">{pets.map((pet) => <article className="adoption-card card" key={pet.id}><div className="adoption-info"><p className="eyebrow">{pet.shelterName}</p><h3>{pet.name}</h3><p>{pet.species}{pet.breed ? ` · ${pet.breed}` : ''}{pet.approximateAge ? ` · ${pet.approximateAge}` : ''}</p><p>{pet.description || 'Este animal busca un hogar responsable.'}</p>{pet.vaccinations?.length > 0 && <small>{pet.vaccinations.length} vacuna(s) registradas</small>}<button className="button button-primary" type="button" onClick={() => requestAdoption(pet.id)}>Solicitar adopción</button></div></article>)}</div>
       </div>
-      <aside className="adoption-side card"><p className="eyebrow">MI SOLICITUD</p><textarea placeholder="Mensaje para el refugio..." value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} />{requests.map((request) => <div className="request-row" key={request.id}><strong>{request.petName}</strong><span>{request.status}</span><small>{request.applicantMessage || 'Sin mensaje'}</small></div>)}{role === 'Shelter' && <form className="publish-form" onSubmit={publishPet}><p className="eyebrow">PUBLICAR ANIMAL</p><input required placeholder="Nombre" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} /><input required placeholder="Especie" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })} /><input placeholder="Raza" value={petForm.breed} onChange={(event) => setPetForm({ ...petForm, breed: event.target.value })} /><input placeholder="Edad aproximada" value={petForm.approximateAge} onChange={(event) => setPetForm({ ...petForm, approximateAge: event.target.value })} /><textarea placeholder="Descripción" value={petForm.description} onChange={(event) => setPetForm({ ...petForm, description: event.target.value })} /><button className="button button-secondary" type="submit">Publicar</button></form>}</aside>
+      <aside className="adoption-side card"><p className="eyebrow">{role === 'Shelter' ? 'SOLICITUDES DEL REFUGIO' : 'MI SOLICITUD'}</p>{role !== 'Shelter' && <textarea placeholder="Mensaje para el refugio..." value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} />}{requests.map((request) => <div className="request-row" key={request.id}><strong>{request.petName}</strong><span>{request.status}</span><small>{request.applicantMessage || 'Sin mensaje'}</small>{role === 'Shelter' && request.status < 2 && <div><button className="button button-secondary" type="button" onClick={() => reviewRequest(request.id, 2)}>Aprobar</button> <button className="button button-ghost" type="button" onClick={() => reviewRequest(request.id, 3)}>Rechazar</button></div>}</div>)}{role === 'Shelter' && <form className="publish-form" onSubmit={publishPet}><p className="eyebrow">PUBLICAR ANIMAL</p><input required placeholder="Nombre" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} /><input required placeholder="Especie" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })} /><input placeholder="Raza" value={petForm.breed} onChange={(event) => setPetForm({ ...petForm, breed: event.target.value })} /><input placeholder="Edad aproximada" value={petForm.approximateAge} onChange={(event) => setPetForm({ ...petForm, approximateAge: event.target.value })} /><textarea placeholder="Descripción" value={petForm.description} onChange={(event) => setPetForm({ ...petForm, description: event.target.value })} /><button className="button button-secondary" type="submit">Publicar</button></form>}</aside>
     </section>
   )
 }
@@ -486,20 +496,71 @@ function AppointmentsView({ token, pets, onError }) {
   )
 }
 
+function ClinicAppointmentsView({ token, onError }) {
+  const [appointments, setAppointments] = useState([])
+  const [serviceForm, setServiceForm] = useState({ name: '', description: '', price: 0, durationMinutes: 30 })
+  const [scheduleForm, setScheduleForm] = useState({ dayOfWeek: 1, opensAt: '09:00', closesAt: '17:00' })
+
+  useEffect(() => {
+    appointmentsApi.clinic(token).then(setAppointments).catch(onError)
+  }, [onError, token])
+
+  async function updateStatus(appointmentId, status) {
+    try {
+      const appointment = await appointmentsApi.updateStatus(token, appointmentId, Number(status))
+      setAppointments((current) => current.map((item) => item.id === appointment.id ? appointment : item))
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function createService(event) {
+    event.preventDefault()
+    try {
+      await appointmentsApi.createService(token, { ...serviceForm, price: Number(serviceForm.price), durationMinutes: Number(serviceForm.durationMinutes) })
+      setServiceForm({ name: '', description: '', price: 0, durationMinutes: 30 })
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function createSchedule(event) {
+    event.preventDefault()
+    try {
+      await appointmentsApi.createSchedule(token, scheduleForm)
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  return <section className="clinic-dashboard"><div className="marketplace-heading"><div><p className="eyebrow">PETPALS / AGENDA</p><h2>Gestiona tus citas.</h2><p className="marketplace-intro">Confirma, completa o cancela las reservas de tus clientes.</p></div></div><div className="clinic-setup-grid"><form className="card clinic-profile-form" onSubmit={createService}><strong>Nuevo servicio</strong><input required placeholder="Nombre" value={serviceForm.name} onChange={(event) => setServiceForm({ ...serviceForm, name: event.target.value })} /><input placeholder="Descripción" value={serviceForm.description} onChange={(event) => setServiceForm({ ...serviceForm, description: event.target.value })} /><input type="number" min="0" step="0.01" placeholder="Precio" value={serviceForm.price} onChange={(event) => setServiceForm({ ...serviceForm, price: event.target.value })} /><input type="number" min="1" placeholder="Duración en minutos" value={serviceForm.durationMinutes} onChange={(event) => setServiceForm({ ...serviceForm, durationMinutes: event.target.value })} /><button className="button button-secondary" type="submit">Guardar servicio</button></form><form className="card clinic-profile-form" onSubmit={createSchedule}><strong>Horario semanal</strong><select value={scheduleForm.dayOfWeek} onChange={(event) => setScheduleForm({ ...scheduleForm, dayOfWeek: Number(event.target.value) })}><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select><input type="time" value={scheduleForm.opensAt} onChange={(event) => setScheduleForm({ ...scheduleForm, opensAt: event.target.value })} /><input type="time" value={scheduleForm.closesAt} onChange={(event) => setScheduleForm({ ...scheduleForm, closesAt: event.target.value })} /><button className="button button-secondary" type="submit">Guardar horario</button></form></div><div className="card dashboard-list">{!appointments.length && <p className="muted">No tienes citas registradas.</p>}{appointments.map((appointment) => <div className="dashboard-row" key={appointment.id}><div><strong>{appointment.serviceName}</strong><span>{new Date(appointment.startsAtUtc).toLocaleString()}</span><small>{appointment.pets.map((pet) => pet.name).join(', ')}</small></div><select value={appointment.status} onChange={(event) => updateStatus(appointment.id, event.target.value)}><option value="0">Pendiente</option><option value="1">Confirmada</option><option value="2">Cancelada</option><option value="3">Completada</option></select></div>)}</div></section>
+}
+
 function MarketplaceView({ token, role, onError }) {
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState(null)
+  const [orders, setOrders] = useState([])
+  const [clinic, setClinic] = useState(null)
+  const [clinicForm, setClinicForm] = useState({ name: '', description: '', phone: '', address: '', latitude: 0, longitude: 0 })
   const [category, setCategory] = useState('')
   const [loading, setLoading] = useState(true)
+  const [productForm, setProductForm] = useState({ name: '', description: '', category: 0, price: 0, stock: 0 })
 
   useEffect(() => {
     const requests = [marketplaceApi.products(token, null, category)]
     if (role !== 'Clinic') requests.push(marketplaceApi.cart(token))
+    if (role === 'Clinic') requests.push(marketplaceApi.clinicOrders(token))
+    if (role === 'Clinic') requests.push(marketplaceApi.myClinic(token).catch(() => null))
 
     Promise.all(requests)
-      .then(([nextProducts, nextCart]) => {
+      .then(([nextProducts, nextSecondary, nextClinic]) => {
         setProducts(nextProducts)
-        setCart(nextCart || null)
+        if (role === 'Clinic') {
+          setOrders(nextSecondary || [])
+          setClinic(nextClinic)
+          if (nextClinic) setClinicForm(nextClinic)
+        }
+        else setCart(nextSecondary || null)
       })
       .catch(onError)
       .finally(() => setLoading(false))
@@ -523,15 +584,50 @@ function MarketplaceView({ token, role, onError }) {
     }
   }
 
+  async function createProduct(event) {
+    event.preventDefault()
+    try {
+      const product = await marketplaceApi.createProduct(token, { ...productForm, price: Number(productForm.price), stock: Number(productForm.stock) })
+      setProducts((current) => [product, ...current])
+      setProductForm({ name: '', description: '', category: 0, price: 0, stock: 0 })
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function updateOrder(orderId, status) {
+    try {
+      const order = await marketplaceApi.updateOrderStatus(token, orderId, Number(status))
+      setOrders((current) => current.map((item) => item.id === order.id ? order : item))
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function saveClinic(event) {
+    event.preventDefault()
+    try {
+      const savedClinic = await marketplaceApi.saveClinic(token, {
+        ...clinicForm,
+        latitude: Number(clinicForm.latitude),
+        longitude: Number(clinicForm.longitude),
+      })
+      setClinic(savedClinic)
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
   return (
     <section className="marketplace-layout">
       <div className="marketplace-main">
         <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MARKETPLACE</p><h2>Cuida su mundo.</h2><p className="marketplace-intro">Productos seleccionados por veterinarias de la comunidad.</p></div><select aria-label="Filtrar por categoría" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Todas las categorías</option><option value="0">Alimento</option><option value="1">Vacunas</option><option value="2">Medicinas</option><option value="3">Accesorios</option><option value="4">Higiene</option><option value="5">Otros</option></select></div>
+        {role === 'Clinic' && <form className="clinic-profile-form card" onSubmit={saveClinic}><strong>{clinic ? 'Perfil de veterinaria' : 'Configura tu veterinaria'}</strong><input required placeholder="Nombre" value={clinicForm.name} onChange={(event) => setClinicForm({ ...clinicForm, name: event.target.value })} /><input placeholder="Dirección" value={clinicForm.address} onChange={(event) => setClinicForm({ ...clinicForm, address: event.target.value })} /><input placeholder="Teléfono" value={clinicForm.phone} onChange={(event) => setClinicForm({ ...clinicForm, phone: event.target.value })} /><div className="form-row"><input type="number" step="any" placeholder="Latitud" value={clinicForm.latitude} onChange={(event) => setClinicForm({ ...clinicForm, latitude: event.target.value })} /><input type="number" step="any" placeholder="Longitud" value={clinicForm.longitude} onChange={(event) => setClinicForm({ ...clinicForm, longitude: event.target.value })} /></div><button className="button button-secondary" type="submit">Guardar perfil</button></form>}
         {loading && <div className="card loading-card">Cargando productos...</div>}
         {!loading && !products.length && <div className="card empty-card"><span className="empty-icon">+</span><h2>Aún no hay productos</h2><p>Prueba otra categoría o vuelve más tarde.</p></div>}
         <div className="product-grid">{products.map((product) => <article className="product-card card" key={product.id}><div className="product-art"><span>{product.category === 0 ? 'FOOD' : 'CARE'}</span></div><div className="product-info"><p className="eyebrow">{product.clinicName}</p><h3>{product.name}</h3><p>{product.description || 'Producto para el cuidado de tu mascota.'}</p><div className="product-bottom"><strong>${product.price.toFixed(2)}</strong><button className="button button-primary" disabled={!product.stock} type="button" onClick={() => addProduct(product.id)}>{product.stock ? 'Añadir' : 'Agotado'}</button></div><small>{product.stock} disponibles</small></div></article>)}</div>
       </div>
-      {role !== 'Clinic' && <aside className="cart-panel card"><div className="section-heading"><div><p className="eyebrow">TU CARRITO</p><h2>Resumen</h2></div><span className="count-badge">{cart?.items?.length || 0}</span></div>{!cart?.items?.length ? <p className="muted">Tu carrito está vacío.</p> : <><div className="cart-items">{cart.items.map((item) => <div className="cart-item" key={item.id}><div><strong>{item.productName}</strong><small>{item.clinicName} · {item.quantity} x ${item.unitPrice.toFixed(2)}</small></div><b>${item.subtotal.toFixed(2)}</b></div>)}</div><div className="cart-total"><span>Total</span><strong>${cart.total.toFixed(2)}</strong></div><button className="button button-primary button-wide" type="button" onClick={checkout}>Confirmar pedido</button><small className="cart-note">Sin pago real en esta versión.</small></>}</aside>}
+      {role !== 'Clinic' ? <aside className="cart-panel card"><div className="section-heading"><div><p className="eyebrow">TU CARRITO</p><h2>Resumen</h2></div><span className="count-badge">{cart?.items?.length || 0}</span></div>{!cart?.items?.length ? <p className="muted">Tu carrito está vacío.</p> : <><div className="cart-items">{cart.items.map((item) => <div className="cart-item" key={item.id}><div><strong>{item.productName}</strong><small>{item.clinicName} · {item.quantity} x ${item.unitPrice.toFixed(2)}</small></div><b>${item.subtotal.toFixed(2)}</b></div>)}</div><div className="cart-total"><span>Total</span><strong>${cart.total.toFixed(2)}</strong></div><button className="button button-primary button-wide" type="button" onClick={checkout}>Confirmar pedido</button><small className="cart-note">Sin pago real en esta versión.</small></>}</aside> : <aside className="cart-panel card"><p className="eyebrow">GESTIÓN DE VETERINARIA</p><form className="publish-form" onSubmit={createProduct}><strong>Nuevo producto</strong><input required placeholder="Nombre" value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} /><input placeholder="Descripción" value={productForm.description} onChange={(event) => setProductForm({ ...productForm, description: event.target.value })} /><input type="number" min="0" step="0.01" placeholder="Precio" value={productForm.price} onChange={(event) => setProductForm({ ...productForm, price: event.target.value })} /><input type="number" min="0" placeholder="Stock" value={productForm.stock} onChange={(event) => setProductForm({ ...productForm, stock: event.target.value })} /><button className="button button-secondary" type="submit">Publicar producto</button></form><div className="clinic-orders"><strong>Pedidos</strong>{orders.map((order) => <div className="request-row" key={order.id}><span>{order.id.slice(0, 8)} · ${order.total.toFixed(2)}</span><select value={order.status} onChange={(event) => updateOrder(order.id, event.target.value)}><option value="0">Pendiente</option><option value="1">Confirmado</option><option value="2">Cancelado</option><option value="3">Completado</option></select></div>)}</div></aside>}
     </section>
   )
 }
@@ -540,7 +636,7 @@ function AuthScreen({ mode, setMode, form, setForm, onSubmit, loading, error }) 
   return (
     <main className="auth-shell">
       <section className="auth-visual"><p className="eyebrow">PETPALS / SOCIAL FEED</p><div className="auth-slogan"><span>Pequeños momentos.</span><strong>Grandes historias.</strong></div><p>Un lugar para compartir la vida que construyes con tus mascotas.</p><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="paw-note">La comunidad empieza con una historia.</div></section>
-      <section className="auth-panel"><div className="auth-form-wrap"><div className="brand-lockup"><div className="brand-mark">P</div><span>PetPals</span></div><p className="eyebrow">{mode === 'login' ? 'BIENVENIDO DE VUELTA' : 'ÚNETE A LA MANADA'}</p><h1>{mode === 'login' ? 'Vuelve a tu comunidad.' : 'Crea tu espacio.'}</h1><p className="auth-intro">{mode === 'login' ? 'Continúa compartiendo esos momentos que importan.' : 'Comparte la vida de tus mascotas con personas que la entienden.'}</p>{error && <div className="alert">{error}</div>}<form className="auth-form" onSubmit={onSubmit}>{mode === 'register' && <label>Nombre visible<input required value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /></label>}<label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label>Contraseña<input required type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label><button className="button button-primary button-wide" disabled={loading} type="submit">{loading ? 'Procesando...' : mode === 'login' ? 'Entrar a PetPals' : 'Crear cuenta'}</button></form><button className="switch-auth" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? '¿Aún no tienes cuenta? Regístrate' : 'Ya tengo una cuenta'}</button></div></section>
+      <section className="auth-panel"><div className="auth-form-wrap"><div className="brand-lockup"><div className="brand-mark">P</div><span>PetPals</span></div><p className="eyebrow">{mode === 'login' ? 'BIENVENIDO DE VUELTA' : 'ÚNETE A LA MANADA'}</p><h1>{mode === 'login' ? 'Vuelve a tu comunidad.' : 'Crea tu espacio.'}</h1><p className="auth-intro">{mode === 'login' ? 'Continúa compartiendo esos momentos que importan.' : 'Comparte la vida de tus mascotas con personas que la entienden.'}</p>{error && <div className="alert">{error}</div>}<form className="auth-form" onSubmit={onSubmit}>{mode === 'register' && <><label>Nombre visible<input required value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /></label><label>Tipo de cuenta<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="User">Dueño de mascota</option><option value="Clinic">Veterinaria</option><option value="Shelter">Refugio</option></select></label></>}<label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label>Contraseña<input required type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label><button className="button button-primary button-wide" disabled={loading} type="submit">{loading ? 'Procesando...' : mode === 'login' ? 'Entrar a PetPals' : 'Crear cuenta'}</button></form><button className="switch-auth" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? '¿Aún no tienes cuenta? Regístrate' : 'Ya tengo una cuenta'}</button></div></section>
     </main>
   )
 }

@@ -120,6 +120,12 @@ public sealed class AdoptionService(ApplicationDbContext db) : IAdoptionService
         if (request.Status == AdoptionRequestStatus.Approved)
         {
             adoptionRequest.Pet.Status = AdoptablePetStatus.Adopted;
+            await db.AdoptionRequests
+                .Where(item => item.AdoptablePetId == adoptionRequest.Pet.Id && item.Id != adoptionRequest.Request.Id &&
+                    (item.Status == AdoptionRequestStatus.Pending || item.Status == AdoptionRequestStatus.UnderReview))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.Status, AdoptionRequestStatus.Rejected)
+                    .SetProperty(item => item.ResolvedAtUtc, DateTime.UtcNow), cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);

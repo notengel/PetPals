@@ -11,6 +11,11 @@ public sealed class ChatHub(IChatService chatService) : Hub
 {
     public async Task JoinConversation(Guid conversationId)
     {
+        if (!await chatService.CanAccessConversationAsync(CurrentUserId(), conversationId, Context.ConnectionAborted))
+        {
+            throw new HubException("Conversation not found.");
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(conversationId));
     }
 

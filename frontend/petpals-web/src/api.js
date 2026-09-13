@@ -90,6 +90,12 @@ export const socialApi = {
 
 export const marketplaceApi = {
   clinics: (token) => apiRequest('/marketplace/clinics', { token }),
+  myClinic: (token) => apiRequest('/marketplace/clinics/me', { token }),
+  saveClinic: (token, body) => apiRequest('/marketplace/clinics/me', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    token,
+  }),
   products: (token, clinicId, category) => {
     const params = new URLSearchParams()
     if (clinicId) params.set('clinicId', clinicId)
@@ -127,6 +133,7 @@ export const appointmentsApi = {
 export const adoptionApi = {
   pets: (token) => apiRequest('/adoptions/pets', { token }),
   requests: (token) => apiRequest('/adoptions/requests/mine', { token }),
+  shelterRequests: (token) => apiRequest('/adoptions/requests/shelter', { token }),
   request: (token, petId, applicantMessage) => apiRequest(`/adoptions/pets/${petId}/requests`, {
     method: 'POST',
     body: JSON.stringify({ applicantMessage }),
@@ -150,6 +157,38 @@ export const chatApi = {
   sendMessage: (token, conversationId, content) => apiRequest(`/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: JSON.stringify({ content }),
+    token,
+  }),
+  createProduct: (token, body) => apiRequest('/marketplace/products', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    token,
+  }),
+  clinicOrders: (token) => apiRequest('/marketplace/clinic/orders', { token }),
+  updateOrderStatus: (token, orderId, status) => apiRequest(`/marketplace/clinic/orders/${orderId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+    token,
+  }),
+  updateRequest: (token, requestId, status) => apiRequest(`/adoptions/requests/${requestId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, shelterComment: null }),
+    token,
+  }),
+  clinic: (token) => apiRequest('/appointments/clinic', { token }),
+  updateStatus: (token, appointmentId, status) => apiRequest(`/appointments/${appointmentId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, clinicNotes: null }),
+    token,
+  }),
+  createService: (token, body) => apiRequest('/appointments/clinic/services', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    token,
+  }),
+  createSchedule: (token, body) => apiRequest('/appointments/clinic/schedules', {
+    method: 'POST',
+    body: JSON.stringify(body),
     token,
   }),
 }

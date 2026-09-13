@@ -8,6 +8,9 @@ namespace PetPals.Infrastructure.Chat;
 
 public sealed class ChatService(ApplicationDbContext db) : IChatService
 {
+    public Task<bool> CanAccessConversationAsync(Guid userId, Guid conversationId, CancellationToken cancellationToken = default) =>
+        IsParticipantAsync(userId, conversationId, cancellationToken);
+
     public async Task<IReadOnlyList<ConversationDto>> GetConversationsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var conversationIds = db.ConversationParticipants.Where(item => item.UserId == userId).Select(item => item.ConversationId);

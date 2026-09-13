@@ -20,4 +20,6 @@ public interface IMarketplaceService
     Task<CartDto?> RemoveCartItemAsync(Guid buyerUserId, Guid cartItemId, CancellationToken cancellationToken = default);
     Task<MarketplaceResult<CheckoutResponse>> CheckoutAsync(Guid buyerUserId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<OrderDto>> GetMyOrdersAsync(Guid buyerUserId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OrderDto>> GetClinicOrdersAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<MarketplaceResult<OrderDto>> UpdateOrderStatusAsync(Guid userId, Guid orderId, OrderStatus status, CancellationToken cancellationToken = default);
 }

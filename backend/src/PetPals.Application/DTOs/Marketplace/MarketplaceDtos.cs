@@ -122,3 +122,5 @@ public sealed record OrderDto(
     IReadOnlyList<OrderItemDto> Items);
 
 public sealed record CheckoutResponse(IReadOnlyList<OrderDto> Orders);
+
+public sealed record UpdateOrderStatusRequest(OrderStatus Status);

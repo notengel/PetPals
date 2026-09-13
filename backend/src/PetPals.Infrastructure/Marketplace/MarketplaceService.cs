@@ -363,6 +363,52 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
         return orders.Select(order => ToOrderDto(order, clinicNames[order.ClinicId])).ToList();
     }
 
+    public async Task<IReadOnlyList<OrderDto>> GetClinicOrdersAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var clinicId = await db.Clinics.Where(clinic => clinic.OwnerUserId == userId)
+            .Select(clinic => (Guid?)clinic.Id).SingleOrDefaultAsync(cancellationToken);
+        if (clinicId is null)
+        {
+            return [];
+        }
+
+        var clinicName = await db.Clinics.Where(clinic => clinic.Id == clinicId)
+            .Select(clinic => clinic.Name).SingleAsync(cancellationToken);
+        var orders = await db.Orders.AsNoTracking().Include(order => order.Items)
+            .Where(order => order.ClinicId == clinicId)
+            .OrderByDescending(order => order.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return orders.Select(order => ToOrderDto(order, clinicName)).ToList();
+    }
+
+    public async Task<MarketplaceResult<OrderDto>> UpdateOrderStatusAsync(
+        Guid userId,
+        Guid orderId,
+        OrderStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        if (status is not (OrderStatus.Confirmed or OrderStatus.Cancelled or OrderStatus.Completed))
+        {
+            return MarketplaceResult<OrderDto>.Failure("Invalid order status.");
+        }
+
+        var order = await (from currentOrder in db.Orders
+                           join clinic in db.Clinics on currentOrder.ClinicId equals clinic.Id
+                           where currentOrder.Id == orderId && clinic.OwnerUserId == userId
+                           select new { Order = currentOrder, ClinicName = clinic.Name }).SingleOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            return MarketplaceResult<OrderDto>.Failure("Order not found.");
+        }
+
+        order.Order.Status = status;
+        await db.SaveChangesAsync(cancellationToken);
+        await db.Entry(order.Order).Collection(currentOrder => currentOrder.Items).LoadAsync(cancellationToken);
+        return MarketplaceResult<OrderDto>.Success(ToOrderDto(order.Order, order.ClinicName));
+    }
+
     private async Task<Cart> GetOrCreateCartAsync(Guid buyerUserId, CancellationToken cancellationToken)
     {
         var cart = await db.Carts.SingleOrDefaultAsync(

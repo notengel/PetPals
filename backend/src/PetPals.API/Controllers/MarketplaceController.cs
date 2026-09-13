@@ -132,6 +132,22 @@ public sealed class MarketplaceController(IMarketplaceService marketplaceService
         return Ok(await marketplaceService.GetMyOrdersAsync(CurrentUserId(), cancellationToken));
     }
 
+    [HttpGet("clinic/orders")]
+    [Authorize(Roles = "Clinic")]
+    public async Task<ActionResult<IReadOnlyList<OrderDto>>> GetClinicOrders(CancellationToken cancellationToken) =>
+        Ok(await marketplaceService.GetClinicOrdersAsync(CurrentUserId(), cancellationToken));
+
+    [HttpPut("clinic/orders/{orderId:guid}/status")]
+    [Authorize(Roles = "Clinic")]
+    public async Task<ActionResult<OrderDto>> UpdateOrderStatus(
+        Guid orderId,
+        UpdateOrderStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await marketplaceService.UpdateOrderStatusAsync(CurrentUserId(), orderId, request.Status, cancellationToken);
+        return result.Succeeded ? Ok(result.Data) : BadRequest(result.Error);
+    }
+
     private Guid CurrentUserId() =>
         Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }
