@@ -12,6 +12,17 @@ export function clearStoredToken() {
   localStorage.removeItem('petpals_token')
 }
 
+export function getTokenRole(token) {
+  if (!token) return null
+
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || payload.role
+  } catch {
+    return null
+  }
+}
+
 export async function apiRequest(path, options = {}) {
   const { token, ...fetchOptions } = options
   const headers = new Headers(fetchOptions.headers)
@@ -72,6 +83,26 @@ export const socialApi = {
   addComment: (token, postId, body) => apiRequest(`/social/posts/${postId}/comments`, {
     method: 'POST',
     body: JSON.stringify(body),
+    token,
+  }),
+}
+
+export const marketplaceApi = {
+  products: (token, clinicId, category) => {
+    const params = new URLSearchParams()
+    if (clinicId) params.set('clinicId', clinicId)
+    if (category !== '') params.set('category', category)
+    const query = params.toString()
+    return apiRequest(`/marketplace/products${query ? `?${query}` : ''}`, { token })
+  },
+  cart: (token) => apiRequest('/marketplace/cart', { token }),
+  addToCart: (token, productId, quantity = 1) => apiRequest('/marketplace/cart/items', {
+    method: 'POST',
+    body: JSON.stringify({ productId, quantity }),
+    token,
+  }),
+  checkout: (token) => apiRequest('/marketplace/cart/checkout', {
+    method: 'POST',
     token,
   }),
 }

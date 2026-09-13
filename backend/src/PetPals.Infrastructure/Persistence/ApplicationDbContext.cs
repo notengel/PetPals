@@ -16,6 +16,12 @@ public class ApplicationDbContext(
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<PostLike> PostLikes => Set<PostLike>();
     public DbSet<Follow> Follows => Set<Follow>();
+    public DbSet<Clinic> Clinics => Set<Clinic>();
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<Cart> Carts => Set<Cart>();
+    public DbSet<CartItem> CartItems => Set<CartItem>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -103,6 +109,90 @@ public class ApplicationDbContext(
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(follow => follow.FollowedUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Clinic>(entity =>
+        {
+            entity.HasKey(clinic => clinic.Id);
+            entity.HasIndex(clinic => clinic.OwnerUserId).IsUnique();
+            entity.Property(clinic => clinic.Name).HasMaxLength(150).IsRequired();
+            entity.Property(clinic => clinic.Description).HasMaxLength(1000);
+            entity.Property(clinic => clinic.Phone).HasMaxLength(30);
+            entity.Property(clinic => clinic.Address).HasMaxLength(300);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(clinic => clinic.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Product>(entity =>
+        {
+            entity.HasKey(product => product.Id);
+            entity.Property(product => product.Name).HasMaxLength(150).IsRequired();
+            entity.Property(product => product.Description).HasMaxLength(1000);
+            entity.Property(product => product.Price).HasPrecision(18, 2);
+            entity.Property(product => product.ImageUrl).HasMaxLength(500);
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(product => product.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(product => new { product.ClinicId, product.IsActive });
+        });
+
+        modelBuilder.Entity<Cart>(entity =>
+        {
+            entity.HasKey(cart => cart.Id);
+            entity.HasIndex(cart => cart.BuyerUserId).IsUnique();
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(cart => cart.BuyerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CartItem>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.UnitPrice).HasPrecision(18, 2);
+            entity.HasIndex(item => new { item.CartId, item.ProductId }).IsUnique();
+            entity.HasOne<Cart>()
+                .WithMany(cart => cart.Items)
+                .HasForeignKey(item => item.CartId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(item => item.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasKey(order => order.Id);
+            entity.Property(order => order.Total).HasPrecision(18, 2);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(order => order.BuyerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(order => order.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(order => new { order.BuyerUserId, order.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<OrderItem>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.ProductName).HasMaxLength(150).IsRequired();
+            entity.Property(item => item.UnitPrice).HasPrecision(18, 2);
+            entity.Property(item => item.Subtotal).HasPrecision(18, 2);
+            entity.HasOne<Order>()
+                .WithMany(order => order.Items)
+                .HasForeignKey(item => item.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(item => item.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

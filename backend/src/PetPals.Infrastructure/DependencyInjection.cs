@@ -3,10 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PetPals.Application.Abstractions.Auth;
+using PetPals.Application.Abstractions.Marketplace;
 using PetPals.Application.Abstractions.Social;
 using PetPals.Infrastructure.Authentication;
 using PetPals.Infrastructure.Configuration;
 using PetPals.Infrastructure.Identity;
+using PetPals.Infrastructure.Marketplace;
 using PetPals.Infrastructure.Persistence;
 using PetPals.Infrastructure.Social;
 
@@ -48,6 +50,7 @@ public static class DependencyInjection
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ISocialFeedService, SocialFeedService>();
+        services.AddScoped<IMarketplaceService, MarketplaceService>();
 
         return services;
     }

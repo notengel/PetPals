@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { authApi, clearStoredToken, getStoredToken, socialApi, storeToken } from './api'
+import { authApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
 import './App.css'
 
 function App() {
@@ -16,6 +16,7 @@ function App() {
   const [commentForms, setCommentForms] = useState({})
   const [loading, setLoading] = useState(Boolean(token))
   const [error, setError] = useState('')
+  const [activeView, setActiveView] = useState('feed')
 
   useEffect(() => {
     if (!token) return
@@ -151,6 +152,10 @@ function App() {
           <h1>Un buen día para compartirlo.</h1>
         </div>
         <div className="topbar-actions">
+          <nav className="top-nav" aria-label="Main navigation">
+            <button className={activeView === 'feed' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('feed')}>Feed</button>
+            <button className={activeView === 'marketplace' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('marketplace')}>Tienda</button>
+          </nav>
           <span className="user-pill">{profile?.displayName || 'Mi perfil'}</span>
           <button className="button button-ghost" type="button" onClick={logout}>Salir</button>
         </div>
@@ -158,7 +163,9 @@ function App() {
 
       {error && <div className="alert">{error}</div>}
 
-      <div className="content-grid">
+      {activeView === 'marketplace'
+        ? <MarketplaceView token={token} role={getTokenRole(token)} onError={handleError} />
+        : <div className="content-grid">
         <aside className="sidebar">
           <section className="side-card profile-card">
             <div className="avatar avatar-large">{profile?.displayName?.[0] || 'P'}</div>
@@ -220,8 +227,58 @@ function App() {
             ))}
           </div>
         </section>
-      </div>
+        </div>}
     </main>
+  )
+}
+
+function MarketplaceView({ token, role, onError }) {
+  const [products, setProducts] = useState([])
+  const [cart, setCart] = useState(null)
+  const [category, setCategory] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const requests = [marketplaceApi.products(token, null, category)]
+    if (role !== 'Clinic') requests.push(marketplaceApi.cart(token))
+
+    Promise.all(requests)
+      .then(([nextProducts, nextCart]) => {
+        setProducts(nextProducts)
+        setCart(nextCart || null)
+      })
+      .catch(onError)
+      .finally(() => setLoading(false))
+  }, [category, onError, role, token])
+
+  async function addProduct(productId) {
+    try {
+      setCart(await marketplaceApi.addToCart(token, productId))
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function checkout() {
+    try {
+      await marketplaceApi.checkout(token)
+      setCart(await marketplaceApi.cart(token))
+      setProducts(await marketplaceApi.products(token, null, category))
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  return (
+    <section className="marketplace-layout">
+      <div className="marketplace-main">
+        <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MARKETPLACE</p><h2>Cuida su mundo.</h2><p className="marketplace-intro">Productos seleccionados por veterinarias de la comunidad.</p></div><select aria-label="Filtrar por categoría" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Todas las categorías</option><option value="0">Alimento</option><option value="1">Vacunas</option><option value="2">Medicinas</option><option value="3">Accesorios</option><option value="4">Higiene</option><option value="5">Otros</option></select></div>
+        {loading && <div className="card loading-card">Cargando productos...</div>}
+        {!loading && !products.length && <div className="card empty-card"><span className="empty-icon">+</span><h2>Aún no hay productos</h2><p>Prueba otra categoría o vuelve más tarde.</p></div>}
+        <div className="product-grid">{products.map((product) => <article className="product-card card" key={product.id}><div className="product-art"><span>{product.category === 0 ? 'FOOD' : 'CARE'}</span></div><div className="product-info"><p className="eyebrow">{product.clinicName}</p><h3>{product.name}</h3><p>{product.description || 'Producto para el cuidado de tu mascota.'}</p><div className="product-bottom"><strong>${product.price.toFixed(2)}</strong><button className="button button-primary" disabled={!product.stock} type="button" onClick={() => addProduct(product.id)}>{product.stock ? 'Añadir' : 'Agotado'}</button></div><small>{product.stock} disponibles</small></div></article>)}</div>
+      </div>
+      {role !== 'Clinic' && <aside className="cart-panel card"><div className="section-heading"><div><p className="eyebrow">TU CARRITO</p><h2>Resumen</h2></div><span className="count-badge">{cart?.items?.length || 0}</span></div>{!cart?.items?.length ? <p className="muted">Tu carrito está vacío.</p> : <><div className="cart-items">{cart.items.map((item) => <div className="cart-item" key={item.id}><div><strong>{item.productName}</strong><small>{item.clinicName} · {item.quantity} x ${item.unitPrice.toFixed(2)}</small></div><b>${item.subtotal.toFixed(2)}</b></div>)}</div><div className="cart-total"><span>Total</span><strong>${cart.total.toFixed(2)}</strong></div><button className="button button-primary button-wide" type="button" onClick={checkout}>Confirmar pedido</button><small className="cart-note">Sin pago real en esta versión.</small></>}</aside>}
+    </section>
   )
 }
 
