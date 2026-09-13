@@ -185,4 +185,6 @@ Lista amplia de ideas para nutrir el roadmap. No todas van en la v1; quedan aqu�
 
 ## 📌 Estado del proyecto
 
-En fase de definición y arranque de desarrollo. Este README sirve como documento base para guiar el desarrollo asistido por IA.
+La v1 funcional está implementada en las ramas de features: autenticación y roles, feed social, marketplace, citas, adopciones, geolocalización y chat en tiempo real. Falta configurar la conexión local a SQL Server, aplicar las migraciones y ejecutar las pruebas end-to-end en el entorno de desarrollo.
+
+Las ideas de la sección de features sugeridas permanecen fuera del alcance de v1 hasta que se prioricen explícitamente.
