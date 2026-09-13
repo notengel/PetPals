@@ -22,6 +22,10 @@ public class ApplicationDbContext(
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<ClinicService> ClinicServices => Set<ClinicService>();
+    public DbSet<ClinicSchedule> ClinicSchedules => Set<ClinicSchedule>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<AppointmentPet> AppointmentPets => Set<AppointmentPet>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -193,6 +197,69 @@ public class ApplicationDbContext(
             entity.HasOne<Product>()
                 .WithMany()
                 .HasForeignKey(item => item.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ClinicService>(entity =>
+        {
+            entity.HasKey(service => service.Id);
+            entity.Property(service => service.Name).HasMaxLength(150).IsRequired();
+            entity.Property(service => service.Description).HasMaxLength(1000);
+            entity.Property(service => service.Price).HasPrecision(18, 2);
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(service => service.ClinicId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(service => new { service.ClinicId, service.IsActive });
+        });
+
+        modelBuilder.Entity<ClinicSchedule>(entity =>
+        {
+            entity.HasKey(schedule => schedule.Id);
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(schedule => schedule.ClinicId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(schedule => new
+            {
+                schedule.ClinicId,
+                schedule.DayOfWeek,
+                schedule.OpensAt,
+                schedule.ClosesAt
+            }).IsUnique();
+        });
+
+        modelBuilder.Entity<Appointment>(entity =>
+        {
+            entity.HasKey(appointment => appointment.Id);
+            entity.Property(appointment => appointment.UserNotes).HasMaxLength(1000);
+            entity.Property(appointment => appointment.ClinicNotes).HasMaxLength(1000);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(appointment => appointment.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(appointment => appointment.ClinicId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ClinicService>()
+                .WithMany()
+                .HasForeignKey(appointment => appointment.ClinicServiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(appointment => new { appointment.ClinicId, appointment.StartsAtUtc });
+            entity.HasIndex(appointment => new { appointment.UserId, appointment.StartsAtUtc });
+        });
+
+        modelBuilder.Entity<AppointmentPet>(entity =>
+        {
+            entity.HasKey(item => new { item.AppointmentId, item.PetId });
+            entity.HasOne<Appointment>()
+                .WithMany(appointment => appointment.Pets)
+                .HasForeignKey(item => item.AppointmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Pet>()
+                .WithMany()
+                .HasForeignKey(item => item.PetId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

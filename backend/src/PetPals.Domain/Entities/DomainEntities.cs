@@ -105,7 +105,6 @@ public class ClinicSchedule : Entity
 public class Appointment : Entity
 {
     public Guid UserId { get; set; }
-    public Guid PetId { get; set; }
     public Guid ClinicId { get; set; }
     public Guid ClinicServiceId { get; set; }
     public DateTime StartsAtUtc { get; set; }
@@ -113,6 +112,13 @@ public class Appointment : Entity
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Pending;
     public string? UserNotes { get; set; }
     public string? ClinicNotes { get; set; }
+    public List<AppointmentPet> Pets { get; set; } = [];
+}
+
+public class AppointmentPet
+{
+    public Guid AppointmentId { get; set; }
+    public Guid PetId { get; set; }
 }
 
 public class Product : Entity

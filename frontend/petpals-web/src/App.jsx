@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { authApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
+import { appointmentsApi, authApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
 import './App.css'
 
 function App() {
@@ -155,6 +155,7 @@ function App() {
           <nav className="top-nav" aria-label="Main navigation">
             <button className={activeView === 'feed' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('feed')}>Feed</button>
             <button className={activeView === 'marketplace' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('marketplace')}>Tienda</button>
+            <button className={activeView === 'appointments' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('appointments')}>Citas</button>
           </nav>
           <span className="user-pill">{profile?.displayName || 'Mi perfil'}</span>
           <button className="button button-ghost" type="button" onClick={logout}>Salir</button>
@@ -165,6 +166,8 @@ function App() {
 
       {activeView === 'marketplace'
         ? <MarketplaceView token={token} role={getTokenRole(token)} onError={handleError} />
+        : activeView === 'appointments'
+          ? <AppointmentsView token={token} pets={pets} onError={handleError} />
         : <div className="content-grid">
         <aside className="sidebar">
           <section className="side-card profile-card">
@@ -229,6 +232,89 @@ function App() {
         </section>
         </div>}
     </main>
+  )
+}
+
+function AppointmentsView({ token, pets, onError }) {
+  const [clinics, setClinics] = useState([])
+  const [services, setServices] = useState([])
+  const [schedules, setSchedules] = useState([])
+  const [appointments, setAppointments] = useState([])
+  const [clinicId, setClinicId] = useState('')
+  const [serviceId, setServiceId] = useState('')
+  const [petIds, setPetIds] = useState([])
+  const [startsAt, setStartsAt] = useState('')
+  const [userNotes, setUserNotes] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([marketplaceApi.clinics(token), appointmentsApi.mine(token)])
+      .then(([nextClinics, nextAppointments]) => {
+        setClinics(nextClinics)
+        setAppointments(nextAppointments)
+        if (nextClinics[0]) setClinicId(nextClinics[0].id)
+      })
+      .catch(onError)
+      .finally(() => setLoading(false))
+  }, [onError, token])
+
+  useEffect(() => {
+    if (!clinicId) return
+    Promise.all([appointmentsApi.services(token, clinicId), appointmentsApi.schedules(token, clinicId)])
+      .then(([nextServices, nextSchedules]) => {
+        setServices(nextServices)
+        setSchedules(nextSchedules)
+        setServiceId(nextServices[0]?.id || '')
+      })
+      .catch(onError)
+  }, [clinicId, onError, token])
+
+  async function bookAppointment(event) {
+    event.preventDefault()
+    if (!clinicId || !serviceId || !petIds.length || !startsAt) return
+
+    try {
+      const appointment = await appointmentsApi.create(token, {
+        clinicId,
+        clinicServiceId: serviceId,
+        petIds,
+        startsAtUtc: new Date(startsAt).toISOString(),
+        userNotes,
+      })
+      setAppointments((current) => [...current, appointment].sort((a, b) => new Date(a.startsAtUtc) - new Date(b.startsAtUtc)))
+      setStartsAt('')
+      setUserNotes('')
+      setPetIds([])
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function cancelAppointment(appointmentId) {
+    try {
+      const cancelled = await appointmentsApi.cancel(token, appointmentId)
+      setAppointments((current) => current.map((item) => item.id === cancelled.id ? cancelled : item))
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  return (
+    <section className="appointments-layout">
+      <div className="appointments-main">
+        <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / CITAS</p><h2>Cuida su salud.</h2><p className="marketplace-intro">Agenda una visita según el horario de cada veterinaria.</p></div></div>
+        <form className="card appointment-form" onSubmit={bookAppointment}>
+          <label>Veterinaria<select value={clinicId} onChange={(event) => setClinicId(event.target.value)}><option value="">Selecciona una veterinaria</option>{clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label>
+          <label>Servicio<select value={serviceId} onChange={(event) => setServiceId(event.target.value)}><option value="">Selecciona un servicio</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} min</option>)}</select></label>
+          <label>Fecha y hora<input required type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
+          <fieldset><legend>Mascotas</legend>{pets.map((pet) => <label className="pet-check" key={pet.id}><input type="checkbox" checked={petIds.includes(pet.id)} onChange={(event) => setPetIds((current) => event.target.checked ? [...current, pet.id] : current.filter((id) => id !== pet.id))} />{pet.name} <small>{pet.species}</small></label>)}{!pets.length && <p className="muted">Agrega una mascota antes de reservar.</p>}</fieldset>
+          <label>Notas opcionales<textarea value={userNotes} onChange={(event) => setUserNotes(event.target.value)} maxLength={1000} /></label>
+          {!!schedules.length && <small className="muted">La veterinaria atiende en horarios semanales configurados. La hora se valida al reservar.</small>}
+          <button className="button button-primary" disabled={loading || !pets.length} type="submit">Solicitar cita</button>
+        </form>
+      </div>
+      <aside className="appointment-list card"><div className="section-heading"><div><p className="eyebrow">MIS CITAS</p><h2>Agenda</h2></div><span className="count-badge">{appointments.length}</span></div>{!appointments.length && <p className="muted">Aún no tienes citas.</p>}{appointments.map((appointment) => <div className="appointment-row" key={appointment.id}><strong>{appointment.serviceName}</strong><span>{new Date(appointment.startsAtUtc).toLocaleString()}</span><small>{appointment.pets.map((pet) => pet.name).join(', ')}</small><em>{appointment.status}</em>{appointment.status !== 2 && <button className="button button-ghost" type="button" onClick={() => cancelAppointment(appointment.id)}>Cancelar</button>}</div>)}</aside>
+    </section>
   )
 }
 

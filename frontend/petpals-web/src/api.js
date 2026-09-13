@@ -88,6 +88,7 @@ export const socialApi = {
 }
 
 export const marketplaceApi = {
+  clinics: (token) => apiRequest('/marketplace/clinics', { token }),
   products: (token, clinicId, category) => {
     const params = new URLSearchParams()
     if (clinicId) params.set('clinicId', clinicId)
@@ -102,6 +103,21 @@ export const marketplaceApi = {
     token,
   }),
   checkout: (token) => apiRequest('/marketplace/cart/checkout', {
+    method: 'POST',
+    token,
+  }),
+}
+
+export const appointmentsApi = {
+  services: (token, clinicId) => apiRequest(`/appointments/clinics/${clinicId}/services`, { token }),
+  schedules: (token, clinicId) => apiRequest(`/appointments/clinics/${clinicId}/schedules`, { token }),
+  mine: (token) => apiRequest('/appointments/mine', { token }),
+  create: (token, body) => apiRequest('/appointments', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    token,
+  }),
+  cancel: (token, appointmentId) => apiRequest(`/appointments/${appointmentId}/cancel`, {
     method: 'POST',
     token,
   }),
