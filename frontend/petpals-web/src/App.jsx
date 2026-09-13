@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { adoptionApi, appointmentsApi, authApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
+import { HubConnectionBuilder } from '@microsoft/signalr'
+import { adoptionApi, API_URL, appointmentsApi, authApi, chatApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
 import './App.css'
 
 function App() {
@@ -158,6 +159,7 @@ function App() {
             <button className={activeView === 'appointments' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('appointments')}>Citas</button>
             <button className={activeView === 'adoptions' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('adoptions')}>Adopciones</button>
             <button className={activeView === 'maps' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('maps')}>Mapa</button>
+            <button className={activeView === 'chat' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('chat')}>Chat</button>
           </nav>
           <span className="user-pill">{profile?.displayName || 'Mi perfil'}</span>
           <button className="button button-ghost" type="button" onClick={logout}>Salir</button>
@@ -174,6 +176,8 @@ function App() {
           ? <AdoptionsView token={token} role={getTokenRole(token)} onError={handleError} />
         : activeView === 'maps'
           ? <MapsView token={token} onError={handleError} />
+        : activeView === 'chat'
+          ? <ChatView token={token} onError={handleError} />
         : <div className="content-grid">
         <aside className="sidebar">
           <section className="side-card profile-card">
@@ -238,6 +242,67 @@ function App() {
         </section>
         </div>}
     </main>
+  )
+}
+
+function ChatView({ token, onError }) {
+  const [conversations, setConversations] = useState([])
+  const [conversationId, setConversationId] = useState('')
+  const [messages, setMessages] = useState([])
+  const [content, setContent] = useState('')
+  const [participantId, setParticipantId] = useState('')
+
+  useEffect(() => {
+    chatApi.conversations(token)
+      .then((nextConversations) => {
+        setConversations(nextConversations)
+        setConversationId(nextConversations[0]?.id || '')
+      })
+      .catch(onError)
+  }, [onError, token])
+
+  useEffect(() => {
+    if (!conversationId) return undefined
+    let connection
+    chatApi.messages(token, conversationId).then(setMessages).catch(onError)
+    connection = new HubConnectionBuilder()
+      .withUrl(`${API_URL.replace(/\/api$/, '')}/hubs/chat`, { accessTokenFactory: () => token })
+      .withAutomaticReconnect()
+      .build()
+    connection.on('MessageReceived', (message) => setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]))
+    connection.start().then(() => connection.invoke('JoinConversation', conversationId)).catch(onError)
+    return () => { connection.stop() }
+  }, [conversationId, onError, token])
+
+  async function createConversation(event) {
+    event.preventDefault()
+    if (!participantId.trim()) return
+    try {
+      const conversation = await chatApi.createConversation(token, participantId.trim())
+      setConversations((current) => current.some((item) => item.id === conversation.id) ? current : [conversation, ...current])
+      setConversationId(conversation.id)
+      setParticipantId('')
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function sendMessage(event) {
+    event.preventDefault()
+    if (!content.trim() || !conversationId) return
+    try {
+      await chatApi.sendMessage(token, conversationId, content)
+      setContent('')
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  return (
+    <section className="chat-layout">
+      <aside className="chat-sidebar card"><div className="section-heading"><div><p className="eyebrow">PETPALS / CHAT</p><h2>Conversaciones</h2></div><span className="count-badge">{conversations.length}</span></div><form className="new-chat-form" onSubmit={createConversation}><input placeholder="ID del usuario" value={participantId} onChange={(event) => setParticipantId(event.target.value)} /><button className="button button-secondary" type="submit">Nueva conversación</button></form>{conversations.map((conversation) => <button className={conversation.id === conversationId ? 'conversation-button active' : 'conversation-button'} type="button" key={conversation.id} onClick={() => setConversationId(conversation.id)}>{conversation.participants.map((participant) => participant.displayName).join(' · ')}</button>)}{!conversations.length && <p className="muted">Crea una conversación con el ID de otro usuario.</p>}</aside>
+      <section className="chat-panel card"><div className="chat-messages">{!conversationId && <p className="muted">Selecciona o crea una conversación.</p>}{messages.map((message) => <div className="message-bubble" key={message.id}><strong>{message.senderDisplayName}</strong><p>{message.content}</p><small>{new Date(message.sentAtUtc).toLocaleString()}</small></div>)}</div><form className="chat-composer" onSubmit={sendMessage}><input disabled={!conversationId} placeholder="Escribe un mensaje..." value={content} onChange={(event) => setContent(event.target.value)} /><button className="button button-primary" disabled={!conversationId} type="submit">Enviar</button></form></section>
+    </section>
   )
 }
 

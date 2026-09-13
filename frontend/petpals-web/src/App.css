@@ -161,6 +161,18 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
 .clinic-row div { display: grid; gap: 4px; }
 .clinic-row small, .clinic-row span { color: var(--muted); }
 .clinic-row span { flex: 0 0 auto; font: 11px 'DM Mono', monospace; }
+.chat-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; max-width: 1180px; margin: 0 auto; }
+.chat-sidebar { display: grid; align-content: start; gap: 12px; height: fit-content; padding: 22px; }
+.new-chat-form { display: grid; gap: 8px; }
+.conversation-button { border: 0; border-top: 1px solid var(--line); background: transparent; padding: 14px 4px; color: var(--ink); text-align: left; }
+.conversation-button.active { color: var(--accent); font-weight: 700; }
+.chat-panel { display: grid; grid-template-rows: minmax(380px, 1fr) auto; min-height: 520px; padding: 22px; }
+.chat-messages { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.message-bubble { align-self: flex-start; max-width: 75%; padding: 12px 15px; border-radius: 14px 14px 14px 3px; background: #eef2e8; }
+.message-bubble p { margin: 5px 0; }
+.message-bubble small { color: var(--muted); }
+.chat-composer { display: flex; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+.chat-composer input { flex: 1; }
 
 @media (max-width: 850px) {
   .content-grid { grid-template-columns: 1fr; gap: 22px; }
@@ -171,6 +183,7 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
   .adoptions-layout { grid-template-columns: 1fr; }
   .adoption-grid { grid-template-columns: 1fr; }
   .maps-layout { grid-template-columns: 1fr; }
+  .chat-layout { grid-template-columns: 1fr; }
   .cart-panel { position: static; }
   .auth-visual { min-height: 360px; padding: 28px; }
   .auth-slogan { margin: 70px 0 40px; font-size: 58px; }

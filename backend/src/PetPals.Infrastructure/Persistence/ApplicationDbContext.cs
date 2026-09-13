@@ -30,6 +30,9 @@ public class ApplicationDbContext(
     public DbSet<AdoptablePet> AdoptablePets => Set<AdoptablePet>();
     public DbSet<VaccinationRecord> VaccinationRecords => Set<VaccinationRecord>();
     public DbSet<AdoptionRequest> AdoptionRequests => Set<AdoptionRequest>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationParticipant> ConversationParticipants => Set<ConversationParticipant>();
+    public DbSet<Message> Messages => Set<Message>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -326,6 +329,41 @@ public class ApplicationDbContext(
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(request => new { request.AdoptablePetId, request.Status });
             entity.HasIndex(request => new { request.ApplicantUserId, request.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<Conversation>(entity =>
+        {
+            entity.HasKey(conversation => conversation.Id);
+            entity.HasIndex(conversation => new { conversation.IsActive, conversation.LastMessageAtUtc });
+        });
+
+        modelBuilder.Entity<ConversationParticipant>(entity =>
+        {
+            entity.HasKey(participant => new { participant.ConversationId, participant.UserId });
+            entity.HasOne<Conversation>()
+                .WithMany(conversation => conversation.Participants)
+                .HasForeignKey(participant => participant.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(participant => participant.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(participant => participant.UserId);
+        });
+
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.HasKey(message => message.Id);
+            entity.Property(message => message.Content).HasMaxLength(4000).IsRequired();
+            entity.HasOne<Conversation>()
+                .WithMany(conversation => conversation.Messages)
+                .HasForeignKey(message => message.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(message => message.SenderUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(message => new { message.ConversationId, message.SentAtUtc });
         });
     }
 }

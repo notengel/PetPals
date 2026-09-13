@@ -5,11 +5,13 @@ using Microsoft.Extensions.DependencyInjection;
 using PetPals.Application.Abstractions.Auth;
 using PetPals.Application.Abstractions.Appointments;
 using PetPals.Application.Abstractions.Adoptions;
+using PetPals.Application.Abstractions.Chat;
 using PetPals.Application.Abstractions.Marketplace;
 using PetPals.Application.Abstractions.Social;
 using PetPals.Infrastructure.Authentication;
 using PetPals.Infrastructure.Appointments;
 using PetPals.Infrastructure.Adoptions;
+using PetPals.Infrastructure.Chat;
 using PetPals.Infrastructure.Configuration;
 using PetPals.Infrastructure.Identity;
 using PetPals.Infrastructure.Marketplace;
@@ -55,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IAdoptionService, AdoptionService>();
+        services.AddScoped<IChatService, ChatService>();
         services.AddScoped<ISocialFeedService, SocialFeedService>();
         services.AddScoped<IMarketplaceService, MarketplaceService>();
 

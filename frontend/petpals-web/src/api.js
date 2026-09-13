@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5296/api'
+export const API_URL = API_BASE_URL
 
 export function getStoredToken() {
   return localStorage.getItem('petpals_token')
@@ -134,6 +135,21 @@ export const adoptionApi = {
   createPet: (token, body) => apiRequest('/adoptions/pets', {
     method: 'POST',
     body: JSON.stringify(body),
+    token,
+  }),
+}
+
+export const chatApi = {
+  conversations: (token) => apiRequest('/chat/conversations', { token }),
+  createConversation: (token, participantUserId) => apiRequest('/chat/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ participantUserId }),
+    token,
+  }),
+  messages: (token, conversationId) => apiRequest(`/chat/conversations/${conversationId}/messages`, { token }),
+  sendMessage: (token, conversationId, content) => apiRequest(`/chat/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
     token,
   }),
 }
