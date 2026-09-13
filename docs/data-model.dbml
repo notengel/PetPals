@@ -1,0 +1,324 @@
+// PetPals - Modelo de datos v1
+// La identidad real se implementara con ASP.NET Core Identity.
+
+Enum user_role {
+  user
+  clinic
+  shelter
+}
+
+Enum appointment_status {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
+Enum product_category {
+  food
+  vaccine
+  medicine
+  accessory
+  hygiene
+  other
+}
+
+Enum order_status {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
+Enum adoptable_pet_status {
+  available
+  in_process
+  adopted
+  unavailable
+}
+
+Enum adoption_request_status {
+  pending
+  under_review
+  approved
+  rejected
+  cancelled
+}
+
+Table users {
+  id uuid [pk]
+  email varchar [not null, unique]
+  role user_role [not null]
+  created_at_utc datetime [not null]
+}
+
+Table user_profiles {
+  id uuid [pk]
+  user_id uuid [not null, unique]
+  display_name varchar [not null]
+  bio text
+  avatar_url varchar
+  latitude float
+  longitude float
+  created_at_utc datetime [not null]
+}
+
+Table clinics {
+  id uuid [pk]
+  owner_user_id uuid [not null, unique]
+  name varchar [not null]
+  description text
+  phone varchar
+  address varchar
+  latitude float [not null]
+  longitude float [not null]
+  is_verified boolean [not null]
+  created_at_utc datetime [not null]
+}
+
+Table shelters {
+  id uuid [pk]
+  owner_user_id uuid [not null, unique]
+  name varchar [not null]
+  description text
+  phone varchar
+  address varchar
+  latitude float [not null]
+  longitude float [not null]
+  is_verified boolean [not null]
+  created_at_utc datetime [not null]
+}
+
+Table pets {
+  id uuid [pk]
+  owner_user_id uuid [not null]
+  name varchar [not null]
+  species varchar [not null]
+  breed varchar
+  birth_date date
+  sex varchar
+  description text
+  primary_image_url varchar
+  created_at_utc datetime [not null]
+}
+
+Table posts {
+  id uuid [pk]
+  author_user_id uuid [not null]
+  pet_id uuid
+  content text [not null]
+  media_url varchar
+  is_visible boolean [not null]
+  created_at_utc datetime [not null]
+}
+
+Table comments {
+  id uuid [pk]
+  post_id uuid [not null]
+  user_id uuid [not null]
+  content text [not null]
+  created_at_utc datetime [not null]
+}
+
+Table post_likes {
+  post_id uuid [not null]
+  user_id uuid [not null]
+  created_at_utc datetime [not null]
+
+  indexes {
+    (post_id, user_id) [pk]
+  }
+}
+
+Table follows {
+  follower_user_id uuid [not null]
+  followed_user_id uuid [not null]
+  created_at_utc datetime [not null]
+
+  indexes {
+    (follower_user_id, followed_user_id) [pk]
+  }
+}
+
+Table clinic_services {
+  id uuid [pk]
+  clinic_id uuid [not null]
+  name varchar [not null]
+  description text
+  price decimal
+  duration_minutes int
+  is_active boolean [not null]
+  created_at_utc datetime [not null]
+}
+
+Table clinic_schedules {
+  id uuid [pk]
+  clinic_id uuid [not null]
+  day_of_week int [not null]
+  opens_at time [not null]
+  closes_at time [not null]
+  created_at_utc datetime [not null]
+}
+
+Table appointments {
+  id uuid [pk]
+  user_id uuid [not null]
+  pet_id uuid [not null]
+  clinic_id uuid [not null]
+  clinic_service_id uuid [not null]
+  starts_at_utc datetime [not null]
+  ends_at_utc datetime [not null]
+  status appointment_status [not null]
+  user_notes text
+  clinic_notes text
+  created_at_utc datetime [not null]
+}
+
+Table products {
+  id uuid [pk]
+  clinic_id uuid [not null]
+  name varchar [not null]
+  description text
+  category product_category [not null]
+  price decimal [not null]
+  stock int [not null]
+  image_url varchar
+  is_active boolean [not null]
+  created_at_utc datetime [not null]
+}
+
+Table carts {
+  id uuid [pk]
+  buyer_user_id uuid [not null]
+  created_at_utc datetime [not null]
+}
+
+Table cart_items {
+  id uuid [pk]
+  cart_id uuid [not null]
+  product_id uuid [not null]
+  quantity int [not null]
+  unit_price decimal [not null]
+  created_at_utc datetime [not null]
+
+  indexes {
+    (cart_id, product_id) [unique]
+  }
+}
+
+Table orders {
+  id uuid [pk]
+  buyer_user_id uuid [not null]
+  clinic_id uuid [not null]
+  status order_status [not null]
+  total decimal [not null]
+  created_at_utc datetime [not null]
+}
+
+Table order_items {
+  id uuid [pk]
+  order_id uuid [not null]
+  product_id uuid [not null]
+  product_name varchar [not null]
+  unit_price decimal [not null]
+  quantity int [not null]
+  subtotal decimal [not null]
+  created_at_utc datetime [not null]
+}
+
+Table adoptable_pets {
+  id uuid [pk]
+  shelter_id uuid [not null]
+  name varchar [not null]
+  species varchar [not null]
+  breed varchar
+  sex varchar
+  approximate_age varchar
+  description text
+  status adoptable_pet_status [not null]
+  primary_image_url varchar
+  created_at_utc datetime [not null]
+}
+
+Table vaccination_records {
+  id uuid [pk]
+  adoptable_pet_id uuid [not null]
+  vaccine_name varchar [not null]
+  applied_on date [not null]
+  next_due_on date
+  notes text
+  created_at_utc datetime [not null]
+}
+
+Table adoption_requests {
+  id uuid [pk]
+  adoptable_pet_id uuid [not null]
+  applicant_user_id uuid [not null]
+  status adoption_request_status [not null]
+  applicant_message text
+  shelter_comment text
+  resolved_at_utc datetime
+  created_at_utc datetime [not null]
+}
+
+Table conversations {
+  id uuid [pk]
+  last_message_at_utc datetime
+  is_active boolean [not null]
+  created_at_utc datetime [not null]
+}
+
+Table conversation_participants {
+  conversation_id uuid [not null]
+  user_id uuid [not null]
+  joined_at_utc datetime [not null]
+
+  indexes {
+    (conversation_id, user_id) [pk]
+  }
+}
+
+Table messages {
+  id uuid [pk]
+  conversation_id uuid [not null]
+  sender_user_id uuid [not null]
+  content text [not null]
+  sent_at_utc datetime [not null]
+  read_at_utc datetime
+  created_at_utc datetime [not null]
+}
+
+Ref: user_profiles.user_id - users.id
+Ref: clinics.owner_user_id - users.id
+Ref: shelters.owner_user_id - users.id
+Ref: pets.owner_user_id > users.id
+Ref: posts.author_user_id > users.id
+Ref: posts.pet_id > pets.id
+Ref: comments.post_id > posts.id
+Ref: comments.user_id > users.id
+Ref: post_likes.post_id > posts.id
+Ref: post_likes.user_id > users.id
+Ref: follows.follower_user_id > users.id
+Ref: follows.followed_user_id > users.id
+Ref: clinic_services.clinic_id > clinics.id
+Ref: clinic_schedules.clinic_id > clinics.id
+Ref: appointments.user_id > users.id
+Ref: appointments.pet_id > pets.id
+Ref: appointments.clinic_id > clinics.id
+Ref: appointments.clinic_service_id > clinic_services.id
+Ref: products.clinic_id > clinics.id
+Ref: carts.buyer_user_id > users.id
+Ref: cart_items.cart_id > carts.id
+Ref: cart_items.product_id > products.id
+Ref: orders.buyer_user_id > users.id
+Ref: orders.clinic_id > clinics.id
+Ref: order_items.order_id > orders.id
+Ref: order_items.product_id > products.id
+Ref: adoptable_pets.shelter_id > shelters.id
+Ref: vaccination_records.adoptable_pet_id > adoptable_pets.id
+Ref: adoption_requests.adoptable_pet_id > adoptable_pets.id
+Ref: adoption_requests.applicant_user_id > users.id
+Ref: conversation_participants.conversation_id > conversations.id
+Ref: conversation_participants.user_id > users.id
+Ref: messages.conversation_id > conversations.id
+Ref: messages.sender_user_id > users.id
