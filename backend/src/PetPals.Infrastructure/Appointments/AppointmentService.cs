@@ -178,14 +178,38 @@ public sealed class AppointmentService(ApplicationDbContext db) : IAppointmentSe
 
     private async Task<List<AppointmentDto>> ToDtos(IQueryable<Appointment> query, CancellationToken cancellationToken)
     {
-        var appointments = await query.Join(db.ClinicServices.AsNoTracking(), appointment => appointment.ClinicServiceId,
+        var appointmentRows = await query.Join(db.ClinicServices.AsNoTracking(), appointment => appointment.ClinicServiceId,
                 service => service.Id, (appointment, service) => new { appointment, service })
-            .Select(item => new AppointmentDto(item.appointment.Id, item.appointment.UserId, item.appointment.ClinicId,
-                item.appointment.ClinicServiceId, item.service.Name, item.appointment.StartsAtUtc, item.appointment.EndsAtUtc,
-                item.appointment.Status, item.appointment.UserNotes, item.appointment.ClinicNotes,
-                Array.Empty<AppointmentPetDto>()))
-            .OrderBy(item => item.StartsAtUtc)
+            .OrderBy(item => item.appointment.StartsAtUtc)
+            .Select(item => new
+            {
+                item.appointment.Id,
+                item.appointment.UserId,
+                item.appointment.ClinicId,
+                item.appointment.ClinicServiceId,
+                ServiceName = item.service.Name,
+                item.appointment.StartsAtUtc,
+                item.appointment.EndsAtUtc,
+                item.appointment.Status,
+                item.appointment.UserNotes,
+                item.appointment.ClinicNotes
+            })
             .ToListAsync(cancellationToken);
+
+        var appointments = appointmentRows
+            .Select(item => new AppointmentDto(
+                item.Id,
+                item.UserId,
+                item.ClinicId,
+                item.ClinicServiceId,
+                item.ServiceName,
+                item.StartsAtUtc,
+                item.EndsAtUtc,
+                item.Status,
+                item.UserNotes,
+                item.ClinicNotes,
+                Array.Empty<AppointmentPetDto>()))
+            .ToList();
 
         var appointmentIds = appointments.Select(appointment => appointment.Id).ToArray();
         var pets = await db.AppointmentPets.AsNoTracking()

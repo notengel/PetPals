@@ -1,5 +1,7 @@
+using Microsoft.EntityFrameworkCore;
 using PetPals.API.Extensions;
 using PetPals.Infrastructure;
+using PetPals.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,17 @@ builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+
+    if (app.Environment.IsDevelopment())
+    {
+        await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

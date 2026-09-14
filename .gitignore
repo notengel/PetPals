@@ -18,3 +18,10 @@
 *.env
 *.env.*
 !.env.example
+*.log
+Opencode/
+.playwright-mcp/
+test-credentials.json
+PROMPT-AUDITORIA.md
+CAMBIO-MAPAS.md
+
