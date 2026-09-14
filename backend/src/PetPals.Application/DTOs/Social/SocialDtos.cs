@@ -7,6 +7,8 @@ public sealed record UserProfileDto(
     string DisplayName,
     string? Bio,
     string? AvatarUrl,
+    string? BannerUrl,
+    bool IsPublic,
     double? Latitude,
     double? Longitude);
 
@@ -22,6 +24,11 @@ public sealed class UpdateProfileRequest
     [MaxLength(500)]
     public string? AvatarUrl { get; init; }
 
+    [MaxLength(500)]
+    public string? BannerUrl { get; init; }
+
+    public bool? IsPublic { get; init; }
+
     public double? Latitude { get; init; }
     public double? Longitude { get; init; }
 }
@@ -36,6 +43,14 @@ public sealed record PetDto(
     string? Sex,
     string? Description,
     string? PrimaryImageUrl);
+
+public sealed record PetPhotoDto(Guid Id, Guid PetId, string ImageUrl, DateTime CreatedAtUtc);
+
+public sealed class SetPetPrimaryPhotoRequest
+{
+    [Required]
+    public Guid PhotoId { get; init; }
+}
 
 public class PetRequest
 {

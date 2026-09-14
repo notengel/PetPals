@@ -46,78 +46,201 @@ function PetPicker({ pets, value, onChange }) {
   )
 }
 
-function ProfileView({ profile, pets, posts, loading, comments, commentForms, postText, setPostText, selectedPet, setSelectedPet, petForm, setPetForm, createPost, createPet, toggleLike, toggleComments, addComment, setActiveView }) {
+const apiOrigin = API_URL.replace(/\/api$/, '')
+export function profileImg(url) {
+  if (!url) return null
+  return url.startsWith('/') ? `${apiOrigin}${url}` : url
+}
+
+function PetGallery({ pet, token, onError, onPrimary }) {
+  const [photos, setPhotos] = useState([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    socialApi.petPhotos(token, pet.id).then(setPhotos).catch(onError)
+  }, [open, pet.id]) // ponytail: lazy, solo carga al abrir
+
+  async function upload(file) {
+    if (!file) return
+    try {
+      const photo = await socialApi.uploadPetPhoto(token, pet.id, file)
+      setPhotos((current) => [photo, ...current])
+      if (!pet.primaryImageUrl) onPrimary?.(pet.id, photo.imageUrl)
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function remove(photoId) {
+    try {
+      await socialApi.deletePetPhoto(token, pet.id, photoId)
+      setPhotos((current) => current.filter((p) => p.id !== photoId))
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function makePrimary(photo) {
+    try {
+      const updated = await socialApi.setPetPrimary(token, pet.id, photo.id)
+      onPrimary?.(pet.id, updated.primaryImageUrl)
+    } catch (requestError) { onError(requestError) }
+  }
+
+  return (
+    <div className="pet-card-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {pet.primaryImageUrl
+          ? <img src={profileImg(pet.primaryImageUrl)} alt={pet.name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+          : <span className="pet-dot">{pet.name[0]}</span>}
+        <div className="pet-info"><strong>{pet.name}</strong><small>{pet.species}</small></div>
+        <button className="button button-ghost" type="button" onClick={() => setOpen(!open)}>{open ? 'Cerrar' : 'Fotos'}</button>
+      </div>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          <label><small className="muted">Añadir foto </small><input type="file" accept="image/*" onChange={(event) => upload(event.target.files[0])} /></label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(90px,1fr))', gap: 8, marginTop: 8 }}>
+            {photos.map((photo) => (
+              <div key={photo.id} style={{ position: 'relative' }}>
+                <img src={profileImg(photo.imageUrl)} alt="" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8 }} />
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                  <button className="button button-ghost" type="button" title="Usar como perfil" onClick={() => makePrimary(photo)}>★</button>
+                  <button className="button button-ghost" type="button" title="Eliminar" onClick={() => remove(photo.id)}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {!photos.length && <p className="muted">Sin fotos todavía.</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProfileView({ profile, setProfile, token, onError, pets, setPets }) {
+  const [form, setForm] = useState({ displayName: '', bio: '', isPublic: true })
+  const [myPosts, setMyPosts] = useState([])
+  const [email, setEmail] = useState('')
+  const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' })
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    if (!profile) return
+    setForm({ displayName: profile.displayName || '', bio: profile.bio || '', isPublic: profile.isPublic !== false })
+    socialApi.myPosts(token).then(setMyPosts).catch(onError)
+  }, [profile?.userId]) // ponytail: load once per account, not per keystroke
+
+  if (!profile) return null
   const role = profile?.role || 'User'
+  const avatar = profileImg(profile.avatarUrl)
+  const banner = profileImg(profile.bannerUrl)
+
+  async function saveProfile(event) {
+    event.preventDefault()
+    try {
+      const updated = await socialApi.updateProfile(token, { ...form, avatarUrl: profile.avatarUrl, bannerUrl: profile.bannerUrl })
+      setProfile({ ...profile, ...updated })
+      setNotice('Perfil actualizado.')
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function upload(kind, file) {
+    if (!file) return
+    try {
+      const updated = kind === 'avatar'
+        ? await socialApi.uploadAvatar(token, file)
+        : await socialApi.uploadBanner(token, file)
+      setProfile({ ...profile, ...updated })
+      setNotice(kind === 'avatar' ? 'Foto de perfil actualizada.' : 'Banner actualizado.')
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function saveEmail(event) {
+    event.preventDefault()
+    try {
+      await authApi.changeEmail(token, email)
+      setEmail('')
+      setNotice('Correo actualizado. Usa el nuevo en tu próximo login.')
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function savePassword(event) {
+    event.preventDefault()
+    try {
+      await authApi.changePassword(token, passwords)
+      setPasswords({ currentPassword: '', newPassword: '' })
+      setNotice('Contraseña actualizada.')
+    } catch (requestError) { onError(requestError) }
+  }
+
   return (
     <div className="profile-view fade-in-up">
+      {banner && <img className="profile-banner" src={banner} alt="Portada del perfil" style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 16 }} />}
       <div className="profile-header scale-in">
-        <div className="avatar profile-avatar">{profile?.displayName?.[0] || 'P'}</div>
+        {avatar
+          ? <img className="avatar profile-avatar" src={avatar} alt="Foto de perfil" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
+          : <div className="avatar profile-avatar">{profile?.displayName?.[0] || 'P'}</div>}
         <div className="profile-meta">
           <h1>{profile?.displayName || 'Tu perfil'}</h1>
           <span className="role-badge">{role === 'Clinic' ? 'Veterinaria' : role === 'Shelter' ? 'Refugio' : 'Dueño de mascota'}</span>
           {profile?.bio && <p className="bio">{profile.bio}</p>}
-          <div className="profile-stats">
-            <div className="profile-stat"><strong>{posts.length}</strong><span>Publicaciones</span></div>
-            <div className="profile-stat"><strong>{pets.length}</strong><span>Mascotas</span></div>
-            <div className="profile-stat"><strong>{posts.reduce((a, p) => a + (p.likesCount || 0), 0)}</strong><span>Me gusta</span></div>
-          </div>
+          <small className="muted">{profile.isPublic === false ? 'Perfil privado' : 'Perfil público'}</small>
         </div>
       </div>
+      {notice && <div className="alert" style={{ marginTop: 12 }}>{notice}</div>}
       <div className="profile-grid">
         <div className="profile-main">
-          <div className="magic-card-wrapper" onMouseMove={(event) => { const rect = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty('--mx', `${event.clientX - rect.left}px`); event.currentTarget.style.setProperty('--my', `${event.clientY - rect.top}px`) }}>
-            <div className="magic-spotlight" style={{ '--mx': '50%', '--my': '50%' }} />
-            <form className="composer-card stagger-1" onSubmit={createPost}>
-              <div className="composer-head"><div className="avatar">{profile?.displayName?.[0] || 'P'}</div><div><strong>¿Qué está pasando?</strong><span>Comparte un momento de tu manada.</span></div></div>
-              <textarea aria-label="Contenido de la publicación" value={postText} onChange={(event) => setPostText(event.target.value)} placeholder="Escribe algo bonito..." maxLength={2000} />
-              <div className="composer-footer">
-                <PetPicker pets={pets} value={selectedPet} onChange={setSelectedPet} />
-                <button className="button button-primary" type="submit">Publicar</button>
-              </div>
-            </form>
-          </div>
           <section className="section-card stagger-2">
-            <div className="section-card-head"><h2>Tus mascotas</h2><span className="count-badge">{pets.length}</span></div>
+            <div className="section-card-head"><h2>Mis publicaciones</h2><span className="count-badge">{myPosts.length}</span></div>
             <div className="section-card-body">
-              {pets.map((pet) => (<div className="pet-card-row" key={pet.id}><span className="pet-dot" style={{ background: '#fff0e8', color: 'var(--coral)' }}>{pet.name[0]}</span><div className="pet-info"><strong>{pet.name}</strong><small>{pet.species}</small></div></div>))}
-              {!pets.length && <p className="muted" style={{ textAlign: 'center', padding: '20px' }}>Aún no tienes mascotas. Agrega una desde el formulario de abajo.</p>}
-            </div>
-          </section>
-          <section className="section-card stagger-3">
-            <div className="section-card-head"><h2>Feed reciente</h2></div>
-            <div className="section-card-body" style={{ paddingTop: 0 }}>
-              {loading && <div className="card loading-card">Cargando tu feed...</div>}
-              {!loading && !posts.length && <div className="card empty-card"><span className="empty-icon">+</span><h2>Tu feed comienza aquí</h2><p>Publica el primer momento de tu mascota.</p></div>}
-              <div className="post-list">
-                {posts.map((post) => (
-                  <article className="post-card" key={post.id}>
-                    <div className="post-head"><div className="avatar">{post.authorDisplayName?.[0] || 'P'}</div><div className="post-meta"><strong>{post.authorDisplayName}</strong><span>{new Date(post.createdAtUtc).toLocaleString()}</span></div><button className="more-button" type="button" aria-label="Más opciones">...</button></div>
-                    <p className="post-content">{post.content}</p>
-                    {post.petName && <div className="pet-tag">Con {post.petName}</div>}
-                    <div className="post-actions"><button className={post.isLiked ? 'action-button liked' : 'action-button'} type="button" onClick={() => toggleLike(post)}>♡ {post.likesCount} Me gusta</button><button className="action-button" type="button" onClick={() => toggleComments(post.id)}>◌ {post.commentsCount} Comentarios</button></div>
-                    {comments[post.id] && <div className="comments"><div className="comment-list">{comments[post.id].map((comment) => <div className="comment" key={comment.id}><span className="avatar avatar-small">{comment.userDisplayName?.[0] || 'P'}</span><p><strong>{comment.userDisplayName}</strong>{comment.content}</p></div>)}</div><form className="comment-form" onSubmit={(event) => addComment(event, post.id)}><input aria-label="Nuevo comentario" placeholder="Escribe un comentario..." value={commentForms[post.id] || ''} onChange={(event) => setCommentForms({ ...commentForms, [post.id]: event.target.value })} /><button type="submit">Enviar</button></form></div>}
+              {!myPosts.length && <p className="muted" style={{ textAlign: 'center', padding: 20 }}>Aún no publicas nada.</p>}
+              <div className="post-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
+                {myPosts.map((post) => (
+                  <article className="post-card" key={post.id} style={{ padding: 12 }}>
+                    {post.mediaUrl && <img src={profileImg(post.mediaUrl)} alt="" style={{ width: '100%', borderRadius: 8 }} />}
+                    <p className="post-content" style={{ fontSize: 13 }}>{post.content}</p>
+                    <small className="muted">♡ {post.likesCount} · ◌ {post.commentsCount}</small>
                   </article>
                 ))}
               </div>
             </div>
           </section>
+          <section className="section-card stagger-3">
+            <div className="section-card-head"><h2>Mis mascotas</h2><span className="count-badge">{pets.length}</span></div>
+            <div className="section-card-body">
+              {pets.map((pet) => (
+                <PetGallery key={pet.id} pet={pet} token={token} onError={onError}
+                  onPrimary={(petId, url) => {
+                    setPets((current) => current.map((p) => p.id === petId ? { ...p, primaryImageUrl: url } : p))
+                  }} />
+              ))}
+              {!pets.length && <p className="muted" style={{ textAlign: 'center', padding: 20 }}>Aún no tienes mascotas.</p>}
+            </div>
+          </section>
         </div>
         <aside className="profile-sidebar">
           <div className="profile-sidebar-card stagger-4">
-            <h3>Añadir mascota</h3>
-            <form className="compact-form" onSubmit={createPet} style={{ marginTop: 0 }}>
-              <input aria-label="Nombre de mascota" placeholder="Nombre" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} />
-              <input aria-label="Especie de mascota" placeholder="Especie" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })} />
-              <button className="button button-secondary button-wide" type="submit">+ Añadir mascota</button>
+            <h3>Editar perfil</h3>
+            <form className="compact-form" onSubmit={saveProfile} style={{ marginTop: 0 }}>
+              <input aria-label="Nombre" placeholder="Nombre" value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} required maxLength={100} />
+              <textarea aria-label="Bio" placeholder="Bio" value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} maxLength={500} />
+              <label className="pet-check"><input type="checkbox" checked={form.isPublic} onChange={(event) => setForm({ ...form, isPublic: event.target.checked })} /> Perfil público</label>
+              <button className="button button-secondary button-wide" type="submit">Guardar</button>
             </form>
           </div>
+          <div className="profile-sidebar-card stagger-4">
+            <h3>Fotos</h3>
+            <label>Foto de perfil<input type="file" accept="image/*" onChange={(event) => upload('avatar', event.target.files[0])} /></label>
+            <label>Banner<input type="file" accept="image/*" onChange={(event) => upload('banner', event.target.files[0])} /></label>
+          </div>
           <div className="profile-sidebar-card stagger-5">
-            <h3>Acciones rápidas</h3>
-            <button className="quick-action" type="button" onClick={() => setActiveView('marketplace')}><SidebarGlyph name="store" />Explorar tienda</button>
-            <button className="quick-action" type="button" onClick={() => setActiveView('appointments')}><SidebarGlyph name="calendar" />Pedir cita</button>
-            <button className="quick-action" type="button" onClick={() => setActiveView('adoptions')}><SidebarGlyph name="heart" />Ver adopciones</button>
-            <button className="quick-action" type="button" onClick={() => setActiveView('maps')}><SidebarGlyph name="map" />Buscar en mapa</button>
-            <button className="quick-action" type="button" onClick={() => setActiveView('chat')}><SidebarGlyph name="chat" />Mensajes</button>
+            <h3>Cuenta</h3>
+            <form className="compact-form" onSubmit={saveEmail} style={{ marginTop: 0 }}>
+              <input aria-label="Nuevo correo" type="email" placeholder="Nuevo correo" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              <button className="button button-secondary button-wide" type="submit">Cambiar correo</button>
+            </form>
+            <form className="compact-form" onSubmit={savePassword} style={{ marginTop: 12 }}>
+              <input aria-label="Contraseña actual" type="password" placeholder="Contraseña actual" value={passwords.currentPassword} onChange={(event) => setPasswords({ ...passwords, currentPassword: event.target.value })} required />
+              <input aria-label="Nueva contraseña" type="password" placeholder="Nueva contraseña (8+)" value={passwords.newPassword} onChange={(event) => setPasswords({ ...passwords, newPassword: event.target.value })} required minLength={8} />
+              <button className="button button-secondary button-wide" type="submit">Cambiar contraseña</button>
+            </form>
           </div>
         </aside>
       </div>
@@ -316,7 +439,7 @@ function App() {
 
         <div className="page-content view-enter" key={activeView}>
       {activeView === 'profile'
-        ? <ProfileView profile={profile} pets={pets} posts={posts} loading={loading} comments={comments} commentForms={commentForms} postText={postText} setPostText={setPostText} selectedPet={selectedPet} setSelectedPet={setSelectedPet} petForm={petForm} setPetForm={setPetForm} createPost={createPost} createPet={createPet} toggleLike={toggleLike} toggleComments={toggleComments} addComment={addComment} setActiveView={setActiveView} />
+        ? <ProfileView profile={profile} setProfile={setProfile} token={token} onError={handleError} pets={pets} setPets={setPets} />
         : activeView === 'marketplace'
           ? <MarketplaceView token={token} role={role} onError={handleError} />
         : activeView === 'appointments'
@@ -454,10 +577,87 @@ function ChatView({ token, onError }) {
   )
 }
 
+function ClinicPublicProfile({ token, clinicId, onClose, onError }) {
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+
+  useEffect(() => {
+    marketplaceApi.clinicProfile(token, clinicId).then(setProfile).catch(onError).finally(() => setLoading(false))
+  }, [clinicId, onError, token])
+
+  async function saveReview(event) {
+    event.preventDefault()
+    try {
+      await marketplaceApi.saveClinicReview(token, clinicId, { rating: Number(rating), comment })
+      setComment('')
+      setProfile(await marketplaceApi.clinicProfile(token, clinicId))
+    } catch (requestError) { onError(requestError) }
+  }
+
+  if (loading) return <div className="card loading-card">Cargando perfil...</div>
+  if (!profile) return null
+  const { clinic, services, schedules, products, photos, clinicPhotos, adoptablePets, avgRating, reviewCount, reviews } = profile
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      {clinic.bannerUrl && <img src={profileImg(clinic.bannerUrl)} alt="Portada" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8 }} />}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
+        {clinic.logoUrl
+          ? <img src={profileImg(clinic.logoUrl)} alt="Logo" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover' }} />
+          : <span className="pet-dot">{clinic.name?.[0]}</span>}
+        <div><h3 style={{ margin: 0 }}>{clinic.name} {clinic.isVerified && <small className="muted">✓</small>}</h3>
+          <small className="muted">★ {Number(avgRating || 0).toFixed(1)} ({reviewCount}) · {services.length} servicios · {photos.length} fotos · {adoptablePets.length} animales</small></div>
+        <span style={{ flex: 1 }} />
+        <button className="button button-ghost" type="button" onClick={onClose}>✕</button>
+      </div>
+      {clinic.description && <p>{clinic.description}</p>}
+      <p className="muted">{clinic.address || 'Dirección no disponible'}{clinic.phone ? ` · ${clinic.phone}` : ''} · <a href={`https://www.openstreetmap.org/?mlat=${clinic.latitude}&mlon=${clinic.longitude}#map=17/${clinic.latitude}/${clinic.longitude}`} target="_blank" rel="noreferrer">Ver ubicación</a></p>
+      <p className="eyebrow">FOTOS</p>
+      {(clinicPhotos?.length > 0 || photos.length > 0) ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(100px,1fr))', gap: 8, margin: '8px 0' }}>
+          {(clinicPhotos?.length ? clinicPhotos.map((p) => p.imageUrl) : photos).map((url) => <img key={url} src={profileImg(url)} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8 }} />)}
+        </div>
+      ) : <p className="muted">Sin fotos todavía.</p>}
+      <p className="eyebrow">SERVICIOS</p>
+      {services.length ? <ul>{services.map((s) => <li key={s.id}><small><strong>{s.name}</strong>{s.price ? ` · $${s.price}` : ''}{s.durationMinutes ? ` · ${s.durationMinutes} min` : ''}</small></li>)}</ul> : <p className="muted">Sin servicios publicados.</p>}
+      <p className="eyebrow">HORARIOS</p>
+      {schedules.length ? <ul>{schedules.map((s) => <li key={s.id}><small>{s.dayOfWeek} · {s.opensAt}–{s.closesAt}</small></li>)}</ul> : <p className="muted">Sin horarios publicados.</p>}
+      <p className="eyebrow">ANIMALES RELACIONADOS</p>
+      {adoptablePets.length ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 8 }}>
+          {adoptablePets.map((pet) => (
+            <div key={pet.id}>
+              {(pet.primaryImageUrl || pet.photos?.[0]?.imageUrl) && <img src={profileImg(pet.primaryImageUrl || pet.photos[0].imageUrl)} alt={pet.name} style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8 }} />}
+              <small><strong>{pet.name}</strong> · {pet.species}</small>
+            </div>
+          ))}
+        </div>
+      ) : <p className="muted">Sin animales en adopción vinculados.</p>}
+      <p className="eyebrow">RESEÑAS</p>
+      {(reviews?.length > 0)
+        ? <div>{reviews.map((r) => <div className="request-row" key={r.id}><strong>{r.authorName}</strong><span>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>{r.comment && <small>{r.comment}</small>}</div>)}</div>
+        : <p className="muted">Sin reseñas todavía. Sé la primera persona en opinar.</p>}
+      <form className="publish-form" onSubmit={saveReview}>
+        <select aria-label="Calificación" value={rating} onChange={(event) => setRating(event.target.value)}>
+          <option value="5">★★★★★ (5)</option>
+          <option value="4">★★★★ (4)</option>
+          <option value="3">★★★ (3)</option>
+          <option value="2">★★ (2)</option>
+          <option value="1">★ (1)</option>
+        </select>
+        <textarea placeholder="Cuéntanos tu experiencia..." value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} />
+        <button className="button button-secondary" type="submit">Publicar reseña</button>
+      </form>
+    </div>
+  )
+}
+
 function MapsView({ token, onError }) {
   const [clinics, setClinics] = useState([])
   const [location, setLocation] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [selectedClinicId, setSelectedClinicId] = useState(null)
   const defaultCenter = [40.4168, -3.7038] // Madrid as sensible default
 
   useEffect(() => {
@@ -508,7 +708,8 @@ function MapsView({ token, onError }) {
         <div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>
         {loading ? <div className="map-loading" style={{position: 'static', padding: '40px'}}><i /><span>Cargando ubicaciones...</span></div>
         : !clinics.length ? <div className="map-empty"><strong>Sin veterinarias aún</strong><span>Cuando una clínica se registre aparecerá aquí.</span></div>
-        : sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.openstreetmap.org/?mlat=${clinic.latitude}&mlon=${clinic.longitude}#map=17/${clinic.latitude}/${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span className="distance">{formatDistance(distanceFrom(location, clinic))}</span></a>)}
+        : sortedClinics.map((clinic) => <div className="clinic-row" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span className="distance">{formatDistance(distanceFrom(location, clinic))}</span><button className="button button-secondary" type="button" onClick={() => setSelectedClinicId(clinic.id)}>Ver perfil</button></div>)}
+        {selectedClinicId && <ClinicPublicProfile token={token} clinicId={selectedClinicId} onClose={() => setSelectedClinicId(null)} onError={onError} />}
       </aside>
     </section>
   )
@@ -540,12 +741,21 @@ function AdoptionsView({ token, role, onError }) {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [petForm, setPetForm] = useState({ name: '', species: '', breed: '', approximateAge: '', description: '' })
+  const [shelter, setShelter] = useState(null)
+  const [shelterForm, setShelterForm] = useState({ name: '', description: '', phone: '', address: '', latitude: 0, longitude: 0 })
+  const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    Promise.all([adoptionApi.pets(token), role === 'Shelter' ? adoptionApi.shelterRequests(token) : adoptionApi.requests(token)])
-      .then(([nextPets, nextRequests]) => {
+    const loads = [adoptionApi.pets(token), role === 'Shelter' ? adoptionApi.shelterRequests(token) : adoptionApi.requests(token)]
+    if (role === 'Shelter') loads.push(adoptionApi.myShelter(token).catch(() => null))
+    Promise.all(loads)
+      .then(([nextPets, nextRequests, nextShelter]) => {
         setPets(nextPets)
         setRequests(nextRequests)
+        if (nextShelter) {
+          setShelter(nextShelter)
+          setShelterForm(nextShelter)
+        }
       })
       .catch(onError)
       .finally(() => setLoading(false))
@@ -581,13 +791,121 @@ function AdoptionsView({ token, role, onError }) {
     }
   }
 
+  async function saveShelter(event) {
+    event.preventDefault()
+    try {
+      const saved = await adoptionApi.saveShelter(token, {
+        ...shelterForm, latitude: Number(shelterForm.latitude), longitude: Number(shelterForm.longitude),
+      })
+      setShelter(saved)
+      setShelterForm(saved)
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function uploadShelterPhoto(kind, file) {
+    if (!file) return
+    try {
+      const updated = kind === 'logo'
+        ? await adoptionApi.uploadShelterLogo(token, file)
+        : await adoptionApi.uploadShelterBanner(token, file)
+      setShelter(updated)
+      setShelterForm(updated)
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
+  async function openDetail(pet) {
+    try {
+      const full = await adoptionApi.pet(token, pet.id)
+      setSelected(full)
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function uploadAdoptablePhoto(file) {
+    if (!file || !selected) return
+    try {
+      const photo = await adoptionApi.uploadPetPhoto(token, selected.id, file)
+      const next = { ...selected, photos: [photo, ...(selected.photos || [])], primaryImageUrl: selected.primaryImageUrl || photo.imageUrl }
+      setSelected(next)
+      setPets((current) => current.map((p) => p.id === next.id ? { ...p, primaryImageUrl: next.primaryImageUrl, photos: next.photos } : p))
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function removeAdoptablePhoto(photoId) {
+    try {
+      await adoptionApi.deletePetPhoto(token, selected.id, photoId)
+      const next = { ...selected, photos: (selected.photos || []).filter((p) => p.id !== photoId) }
+      setSelected(next)
+      setPets((current) => current.map((p) => p.id === next.id ? { ...p, photos: next.photos } : p))
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function makeAdoptablePrimary(photo) {
+    try {
+      const updated = await adoptionApi.setPetPrimary(token, selected.id, photo.id)
+      setSelected(updated)
+      setPets((current) => current.map((p) => p.id === updated.id ? updated : p))
+    } catch (requestError) { onError(requestError) }
+  }
+
   return (
     <section className="adoptions-layout">
       <div className="adoptions-main">
         <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / ADOPCIONES</p><h2>Encuentra un nuevo compañero.</h2><p className="marketplace-intro">Conoce animales publicados por refugios de la comunidad.</p></div></div>
+        {role === 'Shelter' && <form className="clinic-profile-form card" onSubmit={saveShelter}>
+          <strong>{shelter ? 'Perfil del refugio' : 'Configura tu refugio'}</strong>
+          {shelter?.bannerUrl && <img src={profileImg(shelter.bannerUrl)} alt="Portada" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8 }} />}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {shelter?.logoUrl
+              ? <img src={profileImg(shelter.logoUrl)} alt="Logo" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover' }} />
+              : <span className="pet-dot">{shelterForm.name?.[0] || 'R'}</span>}
+            {shelter?.isVerified && <small className="muted">✓ Verificado</small>}
+          </div>
+          <input required placeholder="Nombre" value={shelterForm.name} onChange={(event) => setShelterForm({ ...shelterForm, name: event.target.value })} />
+          <textarea placeholder="Descripción" value={shelterForm.description || ''} onChange={(event) => setShelterForm({ ...shelterForm, description: event.target.value })} maxLength={1000} />
+          <input placeholder="Dirección" value={shelterForm.address} onChange={(event) => setShelterForm({ ...shelterForm, address: event.target.value })} />
+          <input placeholder="Teléfono" value={shelterForm.phone} onChange={(event) => setShelterForm({ ...shelterForm, phone: event.target.value })} />
+          <div className="form-row"><input type="number" step="any" placeholder="Latitud" value={shelterForm.latitude} onChange={(event) => setShelterForm({ ...shelterForm, latitude: event.target.value })} /><input type="number" step="any" placeholder="Longitud" value={shelterForm.longitude} onChange={(event) => setShelterForm({ ...shelterForm, longitude: event.target.value })} /></div>
+          <label>Logo<input type="file" accept="image/*" onChange={(event) => uploadShelterPhoto('logo', event.target.files[0])} /></label>
+          <label>Portada<input type="file" accept="image/*" onChange={(event) => uploadShelterPhoto('banner', event.target.files[0])} /></label>
+          <button className="button button-secondary" type="submit">Guardar perfil</button>
+        </form>}
         {loading && <div className="card loading-card">Cargando animales...</div>}
         {!loading && !pets.length && <div className="card empty-card"><h2>No hay animales disponibles</h2><p>Vuelve más tarde para conocer nuevas historias.</p></div>}
-        <div className="adoption-grid">{pets.map((pet) => <article className="adoption-card card" key={pet.id}><div className="adoption-info"><p className="eyebrow">{pet.shelterName}</p><h3>{pet.name}</h3><p>{pet.species}{pet.breed ? ` · ${pet.breed}` : ''}{pet.approximateAge ? ` · ${pet.approximateAge}` : ''}</p><p>{pet.description || 'Este animal busca un hogar responsable.'}</p>{pet.vaccinations?.length > 0 && <small>{pet.vaccinations.length} vacuna(s) registradas</small>}<button className="button button-primary" type="button" onClick={() => requestAdoption(pet.id)}>Solicitar adopción</button></div></article>)}</div>
+        <div className="adoption-grid">{pets.map((pet) => <article className="adoption-card card" key={pet.id}>{(pet.primaryImageUrl || pet.photos?.[0]?.imageUrl) && <img src={profileImg(pet.primaryImageUrl || pet.photos[0].imageUrl)} alt={pet.name} style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 8 }} />}<div className="adoption-info"><p className="eyebrow">{pet.shelterName}</p><h3>{pet.name}</h3><p>{pet.species}{pet.breed ? ` · ${pet.breed}` : ''}{pet.approximateAge ? ` · ${pet.approximateAge}` : ''}</p><p>{pet.description || 'Este animal busca un hogar responsable.'}</p>{pet.vaccinations?.length > 0 && <small>{pet.vaccinations.length} vacuna(s) registradas</small>}<div style={{ display: 'flex', gap: 8 }}><button className="button button-secondary" type="button" onClick={() => openDetail(pet)}>Ver detalle</button>{role !== 'Shelter' && <button className="button button-primary" type="button" onClick={() => requestAdoption(pet.id)}>Solicitar</button>}</div></div></article>)}</div>
+        {selected && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>{selected.name} · {selected.species}</h3>
+              <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>✕</button>
+            </div>
+            <p className="muted">{selected.shelterName}{selected.breed ? ` · ${selected.breed}` : ''}{selected.sex ? ` · ${selected.sex}` : ''}{selected.approximateAge ? ` · ${selected.approximateAge}` : ''}</p>
+            {(selected.photos?.length > 0 || selected.primaryImageUrl) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 8, margin: '8px 0' }}>
+                {selected.primaryImageUrl && <img src={profileImg(selected.primaryImageUrl)} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 8 }} />}
+                {(selected.photos || []).map((photo) => (
+                  <div key={photo.id}>
+                    <img src={profileImg(photo.imageUrl)} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 8 }} />
+                    {role === 'Shelter' && <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      <button className="button button-ghost" type="button" title="Perfil" onClick={() => makeAdoptablePrimary(photo)}>★</button>
+                      <button className="button button-ghost" type="button" title="Eliminar" onClick={() => removeAdoptablePhoto(photo.id)}>✕</button>
+                    </div>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {role === 'Shelter' && <label><small className="muted">Añadir foto </small><input type="file" accept="image/*" onChange={(event) => uploadAdoptablePhoto(event.target.files[0])} /></label>}
+            <p>{selected.description || 'Este animal busca un hogar responsable.'}</p>
+            <p className="eyebrow">VACUNAS / HISTORIAL</p>
+            {(selected.vaccinations?.length > 0)
+              ? <ul>{selected.vaccinations.map((v) => <li key={v.id}><small>{v.vaccineName} · {v.appliedOn}{v.nextDueOn ? ` → ${v.nextDueOn}` : ''}{v.notes ? ` — ${v.notes}` : ''}</small></li>)}</ul>
+              : <p className="muted">Sin vacunas registradas todavía.</p>}
+            {role !== 'Shelter' && <button className="button button-primary" type="button" onClick={() => requestAdoption(selected.id)}>Solicitar adopción</button>}
+          </div>
+        )}
       </div>
       <aside className="adoption-side card"><p className="eyebrow">{role === 'Shelter' ? 'SOLICITUDES DEL REFUGIO' : 'MI SOLICITUD'}</p>{role !== 'Shelter' && <textarea placeholder="Mensaje para el refugio..." value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} />}{requests.map((request) => <div className="request-row" key={request.id}><strong>{request.petName}</strong><span>{request.status}</span><small>{request.applicantMessage || 'Sin mensaje'}</small>{role === 'Shelter' && request.status < 2 && <div><button className="button button-secondary" type="button" onClick={() => reviewRequest(request.id, 2)}>Aprobar</button> <button className="button button-ghost" type="button" onClick={() => reviewRequest(request.id, 3)}>Rechazar</button></div>}</div>)}{role === 'Shelter' && <form className="publish-form" onSubmit={publishPet}><p className="eyebrow">PUBLICAR ANIMAL</p><input required placeholder="Nombre" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} /><input required placeholder="Especie" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })} /><input placeholder="Raza" value={petForm.breed} onChange={(event) => setPetForm({ ...petForm, breed: event.target.value })} /><input placeholder="Edad aproximada" value={petForm.approximateAge} onChange={(event) => setPetForm({ ...petForm, approximateAge: event.target.value })} /><textarea placeholder="Descripción" value={petForm.description} onChange={(event) => setPetForm({ ...petForm, description: event.target.value })} /><button className="button button-secondary" type="submit">Publicar</button></form>}</aside>
     </section>
@@ -717,6 +1035,63 @@ function ClinicAppointmentsView({ token, onError }) {
   return <section className="clinic-dashboard"><div className="marketplace-heading"><div><p className="eyebrow">PETPALS / AGENDA</p><h2>Gestiona tus citas.</h2><p className="marketplace-intro">Confirma, completa o cancela las reservas de tus clientes.</p></div></div><div className="clinic-setup-grid"><form className="card clinic-profile-form" onSubmit={createService}><strong>Nuevo servicio</strong><input required placeholder="Nombre" value={serviceForm.name} onChange={(event) => setServiceForm({ ...serviceForm, name: event.target.value })} /><input placeholder="Descripción" value={serviceForm.description} onChange={(event) => setServiceForm({ ...serviceForm, description: event.target.value })} /><input type="number" min="0" step="0.01" placeholder="Precio" value={serviceForm.price} onChange={(event) => setServiceForm({ ...serviceForm, price: event.target.value })} /><input type="number" min="1" placeholder="Duración en minutos" value={serviceForm.durationMinutes} onChange={(event) => setServiceForm({ ...serviceForm, durationMinutes: event.target.value })} /><button className="button button-secondary" type="submit">Guardar servicio</button></form><form className="card clinic-profile-form" onSubmit={createSchedule}><strong>Horario semanal</strong><select value={scheduleForm.dayOfWeek} onChange={(event) => setScheduleForm({ ...scheduleForm, dayOfWeek: Number(event.target.value) })}><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select><input type="time" value={scheduleForm.opensAt} onChange={(event) => setScheduleForm({ ...scheduleForm, opensAt: event.target.value })} /><input type="time" value={scheduleForm.closesAt} onChange={(event) => setScheduleForm({ ...scheduleForm, closesAt: event.target.value })} /><button className="button button-secondary" type="submit">Guardar horario</button></form></div><div className="card dashboard-list">{!appointments.length && <p className="muted">No tienes citas registradas.</p>}{appointments.map((appointment) => <div className="dashboard-row" key={appointment.id}><div><strong>{appointment.serviceName}</strong><span>{new Date(appointment.startsAtUtc).toLocaleString()}</span><small>{appointment.pets.map((pet) => pet.name).join(', ')}</small></div><select value={appointment.status} onChange={(event) => updateStatus(appointment.id, event.target.value)}><option value="0">Pendiente</option><option value="1">Confirmada</option><option value="2">Cancelada</option><option value="3">Completada</option></select></div>)}</div></section>
 }
 
+function ClinicGallery({ token, clinic, onLogo, onError }) {
+  const [photos, setPhotos] = useState([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open || !clinic?.id) return
+    marketplaceApi.clinicPhotos(token, clinic.id).then(setPhotos).catch(onError)
+  }, [open, clinic?.id]) // ponytail: lazy, solo carga al abrir
+
+  async function upload(file) {
+    if (!file) return
+    try {
+      const photo = await marketplaceApi.uploadClinicPhoto(token, file)
+      setPhotos((current) => [photo, ...current])
+      if (!clinic.logoUrl) onLogo?.(photo.imageUrl)
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function remove(photoId) {
+    try {
+      await marketplaceApi.deleteClinicPhoto(token, photoId)
+      setPhotos((current) => current.filter((p) => p.id !== photoId))
+    } catch (requestError) { onError(requestError) }
+  }
+
+  async function makePrimary(photo) {
+    try {
+      const updated = await marketplaceApi.setClinicPrimary(token, photo.id)
+      onLogo?.(updated.logoUrl)
+    } catch (requestError) { onError(requestError) }
+  }
+
+  if (!clinic?.id) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button className="button button-ghost" type="button" onClick={() => setOpen(!open)}>{open ? 'Cerrar galería' : 'Galería de fotos'}</button>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          <label><small className="muted">Añadir foto </small><input type="file" accept="image/*" onChange={(event) => upload(event.target.files[0])} /></label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(90px,1fr))', gap: 8, marginTop: 8 }}>
+            {photos.map((photo) => (
+              <div key={photo.id}>
+                <img src={profileImg(photo.imageUrl)} alt="" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8 }} />
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                  <button className="button button-ghost" type="button" title="Usar como logo" onClick={() => makePrimary(photo)}>★</button>
+                  <button className="button button-ghost" type="button" title="Eliminar" onClick={() => remove(photo.id)}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {!photos.length && <p className="muted">Sin fotos todavía.</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MarketplaceView({ token, role, onError }) {
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState(null)
@@ -806,11 +1181,42 @@ function MarketplaceView({ token, role, onError }) {
     }
   }
 
+  async function uploadClinicPhoto(kind, file) {
+    if (!file) return
+    try {
+      const updated = kind === 'logo'
+        ? await marketplaceApi.uploadClinicLogo(token, file)
+        : await marketplaceApi.uploadClinicBanner(token, file)
+      setClinic(updated)
+      setClinicForm(updated)
+    } catch (requestError) {
+      onError(requestError)
+    }
+  }
+
   return (
     <section className="marketplace-layout">
       <div className="marketplace-main">
         <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MARKETPLACE</p><h2>Cuida su mundo.</h2><p className="marketplace-intro">Productos seleccionados por veterinarias de la comunidad.</p></div><select aria-label="Filtrar por categoría" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Todas las categorías</option><option value="0">Alimento</option><option value="1">Vacunas</option><option value="2">Medicinas</option><option value="3">Accesorios</option><option value="4">Higiene</option><option value="5">Otros</option></select></div>
-        {role === 'Clinic' && <form className="clinic-profile-form card" onSubmit={saveClinic}><strong>{clinic ? 'Perfil de veterinaria' : 'Configura tu veterinaria'}</strong><input required placeholder="Nombre" value={clinicForm.name} onChange={(event) => setClinicForm({ ...clinicForm, name: event.target.value })} /><input placeholder="Dirección" value={clinicForm.address} onChange={(event) => setClinicForm({ ...clinicForm, address: event.target.value })} /><input placeholder="Teléfono" value={clinicForm.phone} onChange={(event) => setClinicForm({ ...clinicForm, phone: event.target.value })} /><div className="form-row"><input type="number" step="any" placeholder="Latitud" value={clinicForm.latitude} onChange={(event) => setClinicForm({ ...clinicForm, latitude: event.target.value })} /><input type="number" step="any" placeholder="Longitud" value={clinicForm.longitude} onChange={(event) => setClinicForm({ ...clinicForm, longitude: event.target.value })} /></div><button className="button button-secondary" type="submit">Guardar perfil</button></form>}
+        {role === 'Clinic' && <form className="clinic-profile-form card" onSubmit={saveClinic}>
+          <strong>{clinic ? 'Perfil de veterinaria' : 'Configura tu veterinaria'}</strong>
+          {clinic?.bannerUrl && <img src={profileImg(clinic.bannerUrl)} alt="Portada" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8 }} />}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {clinic?.logoUrl
+              ? <img src={profileImg(clinic.logoUrl)} alt="Logo" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover' }} />
+              : <span className="pet-dot">{clinicForm.name?.[0] || 'V'}</span>}
+            {clinic?.isVerified && <small className="muted">✓ Verificada</small>}
+          </div>
+          <input required placeholder="Nombre" value={clinicForm.name} onChange={(event) => setClinicForm({ ...clinicForm, name: event.target.value })} />
+          <textarea placeholder="Descripción del negocio" value={clinicForm.description || ''} onChange={(event) => setClinicForm({ ...clinicForm, description: event.target.value })} maxLength={1000} />
+          <input placeholder="Dirección" value={clinicForm.address} onChange={(event) => setClinicForm({ ...clinicForm, address: event.target.value })} />
+          <input placeholder="Teléfono" value={clinicForm.phone} onChange={(event) => setClinicForm({ ...clinicForm, phone: event.target.value })} />
+          <div className="form-row"><input type="number" step="any" placeholder="Latitud" value={clinicForm.latitude} onChange={(event) => setClinicForm({ ...clinicForm, latitude: event.target.value })} /><input type="number" step="any" placeholder="Longitud" value={clinicForm.longitude} onChange={(event) => setClinicForm({ ...clinicForm, longitude: event.target.value })} /></div>
+          <label>Logo<input type="file" accept="image/*" onChange={(event) => uploadClinicPhoto('logo', event.target.files[0])} /></label>
+          <label>Portada<input type="file" accept="image/*" onChange={(event) => uploadClinicPhoto('banner', event.target.files[0])} /></label>
+          <ClinicGallery token={token} clinic={clinic} onLogo={(url) => { setClinic((c) => c && { ...c, logoUrl: url }); setClinicForm((f) => ({ ...f, logoUrl: url })) }} onError={onError} />
+          <button className="button button-secondary" type="submit">Guardar perfil</button>
+        </form>}
         {loading && <div className="card loading-card">Cargando productos...</div>}
         {!loading && !products.length && <div className="card empty-card"><span className="empty-icon">+</span><h2>Aún no hay productos</h2><p>Prueba otra categoría o vuelve más tarde.</p></div>}
         <div className="product-grid">{products.map((product) => <article className="product-card card" key={product.id}><div className="product-art"><span>{product.category === 0 ? 'FOOD' : 'CARE'}</span></div><div className="product-info"><p className="eyebrow">{product.clinicName}</p><h3>{product.name}</h3><p>{product.description || 'Producto para el cuidado de tu mascota.'}</p><div className="product-bottom"><strong>${product.price.toFixed(2)}</strong><button className="button button-primary" disabled={!product.stock} type="button" onClick={() => addProduct(product.id)}>{product.stock ? 'Añadir' : 'Agotado'}</button></div><small>{product.stock} disponibles</small></div></article>)}</div>

@@ -42,6 +42,8 @@ app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseStaticFiles();
+
 app.MapControllers();
 app.MapHub<PetPals.API.Hubs.ChatHub>("/hubs/chat");
 

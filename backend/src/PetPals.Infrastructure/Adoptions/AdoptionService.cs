@@ -132,11 +132,17 @@ public sealed class AdoptionService(ApplicationDbContext db) : IAdoptionService
         return AdoptionResult<AdoptionRequestDto>.Success(ToDto(adoptionRequest.Request, adoptionRequest.Pet.Name));
     }
 
-    public async Task<AdoptionResult<object>> SaveShelterAsync(Guid userId, UpsertShelterRequest request, CancellationToken cancellationToken = default)
+    public async Task<ShelterDto?> GetMyShelterAsync(Guid userId, CancellationToken cancellationToken = default)
+{
+        var shelter = await db.Shelters.AsNoTracking().SingleOrDefaultAsync(s => s.OwnerUserId == userId, cancellationToken);
+        return shelter is null ? null : ToShelterDto(shelter);
+    }
+
+    public async Task<AdoptionResult<ShelterDto>> SaveShelterAsync(Guid userId, UpsertShelterRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return AdoptionResult<object>.Failure("Shelter name is required.");
+            return AdoptionResult<ShelterDto>.Failure("Shelter name is required.");
         }
 
         var shelter = await db.Shelters.SingleOrDefaultAsync(item => item.OwnerUserId == userId, cancellationToken);
@@ -150,11 +156,56 @@ public sealed class AdoptionService(ApplicationDbContext db) : IAdoptionService
         shelter.Description = request.Description?.Trim();
         shelter.Phone = request.Phone?.Trim();
         shelter.Address = request.Address?.Trim();
+        shelter.LogoUrl = request.LogoUrl?.Trim();
+        shelter.BannerUrl = request.BannerUrl?.Trim();
         shelter.Latitude = request.Latitude;
         shelter.Longitude = request.Longitude;
         await db.SaveChangesAsync(cancellationToken);
-        return AdoptionResult<object>.Success(new { shelter.Id, shelter.Name });
+        return AdoptionResult<ShelterDto>.Success(ToShelterDto(shelter));
     }
+
+    public async Task<IReadOnlyList<AdoptablePetPhotoDto>> GetPetPhotosAsync(Guid petId, CancellationToken cancellationToken = default) =>
+        await db.AdoptablePetPhotos.AsNoTracking().Where(photo => photo.AdoptablePetId == petId)
+            .OrderByDescending(photo => photo.CreatedAtUtc)
+            .Select(photo => new AdoptablePetPhotoDto(photo.Id, photo.AdoptablePetId, photo.ImageUrl, photo.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+
+    public async Task<AdoptablePetPhotoDto?> AddPetPhotoAsync(Guid userId, Guid petId, string imageUrl, CancellationToken cancellationToken = default)
+    {
+        var pet = await OwnsAdoptablePetAsync(userId, petId, cancellationToken);
+        if (pet is null) return null;
+        var photo = new AdoptablePetPhoto { AdoptablePetId = petId, ImageUrl = imageUrl.Trim() };
+        db.AdoptablePetPhotos.Add(photo);
+        if (string.IsNullOrWhiteSpace(pet.PrimaryImageUrl)) pet.PrimaryImageUrl = photo.ImageUrl; // ponytail: primera foto = perfil
+        await db.SaveChangesAsync(cancellationToken);
+        return new AdoptablePetPhotoDto(photo.Id, photo.AdoptablePetId, photo.ImageUrl, photo.CreatedAtUtc);
+    }
+
+    public async Task<bool> DeletePetPhotoAsync(Guid userId, Guid petId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        if (await OwnsAdoptablePetAsync(userId, petId, cancellationToken) is null) return false;
+        var photo = await db.AdoptablePetPhotos.SingleOrDefaultAsync(p => p.Id == photoId && p.AdoptablePetId == petId, cancellationToken);
+        if (photo is null) return false;
+        db.AdoptablePetPhotos.Remove(photo);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<AdoptablePetDto?> SetPetPrimaryPhotoAsync(Guid userId, Guid petId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        var pet = await OwnsAdoptablePetAsync(userId, petId, cancellationToken);
+        var photoExists = await db.AdoptablePetPhotos.AnyAsync(p => p.Id == photoId && p.AdoptablePetId == petId, cancellationToken);
+        if (pet is null || !photoExists) return null;
+        pet.PrimaryImageUrl = (await db.AdoptablePetPhotos.AsNoTracking().SingleAsync(p => p.Id == photoId, cancellationToken)).ImageUrl;
+        await db.SaveChangesAsync(cancellationToken);
+        return (await ToPetDtos(db.AdoptablePets.AsNoTracking().Where(item => item.Id == petId), cancellationToken)).SingleOrDefault();
+    }
+
+    private async Task<AdoptablePet?> OwnsAdoptablePetAsync(Guid userId, Guid petId, CancellationToken cancellationToken) =>
+        await (from pet in db.AdoptablePets
+               join shelter in db.Shelters on pet.ShelterId equals shelter.Id
+               where pet.Id == petId && shelter.OwnerUserId == userId
+               select pet).SingleOrDefaultAsync(cancellationToken);
 
     private async Task<List<AdoptablePetDto>> ToPetDtos(IQueryable<AdoptablePet> query, CancellationToken cancellationToken)
     {
@@ -162,14 +213,18 @@ public sealed class AdoptionService(ApplicationDbContext db) : IAdoptionService
                 (pet, shelter) => new { pet, shelter })
             .Select(item => new AdoptablePetDto(item.pet.Id, item.pet.ShelterId, item.shelter.Name, item.pet.Name,
                 item.pet.Species, item.pet.Breed, item.pet.Sex, item.pet.ApproximateAge, item.pet.Description,
-                item.pet.Status, item.pet.PrimaryImageUrl, Array.Empty<VaccinationRecordDto>()))
+                item.pet.Status, item.pet.PrimaryImageUrl, Array.Empty<VaccinationRecordDto>(), Array.Empty<AdoptablePetPhotoDto>()))
             .ToListAsync(cancellationToken);
         var ids = pets.Select(pet => pet.Id).ToArray();
         var vaccinations = await db.VaccinationRecords.AsNoTracking().Where(record => ids.Contains(record.AdoptablePetId))
             .ToListAsync(cancellationToken);
+        var photos = await db.AdoptablePetPhotos.AsNoTracking().Where(photo => ids.Contains(photo.AdoptablePetId))
+            .OrderByDescending(photo => photo.CreatedAtUtc).ToListAsync(cancellationToken);
         return pets.Select(pet => pet with
         {
-            Vaccinations = vaccinations.Where(record => record.AdoptablePetId == pet.Id).Select(ToDto).ToList()
+            Vaccinations = vaccinations.Where(record => record.AdoptablePetId == pet.Id).Select(ToDto).ToList(),
+            Photos = photos.Where(photo => photo.AdoptablePetId == pet.Id)
+                .Select(photo => new AdoptablePetPhotoDto(photo.Id, photo.AdoptablePetId, photo.ImageUrl, photo.CreatedAtUtc)).ToList()
         }).ToList();
     }
 
@@ -182,6 +237,9 @@ public sealed class AdoptionService(ApplicationDbContext db) : IAdoptionService
 
     private static VaccinationRecordDto ToDto(VaccinationRecord record) =>
         new(record.Id, record.AdoptablePetId, record.VaccineName, record.AppliedOn, record.NextDueOn, record.Notes);
+
+    private static ShelterDto ToShelterDto(Shelter shelter) =>
+        new(shelter.Id, shelter.Name, shelter.Description, shelter.Phone, shelter.Address, shelter.LogoUrl, shelter.BannerUrl, shelter.Latitude, shelter.Longitude, shelter.IsVerified);
 
     private static AdoptionRequestDto ToDto(AdoptionRequest request, string petName) =>
         new(request.Id, request.AdoptablePetId, petName, request.ApplicantUserId, request.Status,

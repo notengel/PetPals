@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using PetPals.Application.DTOs.Adoptions;
+using PetPals.Application.DTOs.Appointments;
 using PetPals.Domain.Enums;
 
 namespace PetPals.Application.DTOs.Marketplace;
@@ -15,6 +17,8 @@ public sealed record ClinicDto(
     string? Description,
     string? Phone,
     string? Address,
+    string? LogoUrl,
+    string? BannerUrl,
     double Latitude,
     double Longitude,
     bool IsVerified);
@@ -33,6 +37,12 @@ public sealed class UpsertClinicRequest
 
     [MaxLength(300)]
     public string? Address { get; init; }
+
+    [MaxLength(500)]
+    public string? LogoUrl { get; init; }
+
+    [MaxLength(500)]
+    public string? BannerUrl { get; init; }
 
     public double Latitude { get; init; }
     public double Longitude { get; init; }
@@ -122,5 +132,38 @@ public sealed record OrderDto(
     IReadOnlyList<OrderItemDto> Items);
 
 public sealed record CheckoutResponse(IReadOnlyList<OrderDto> Orders);
+
+public sealed record ClinicPhotoDto(Guid Id, Guid ClinicId, string ImageUrl, DateTime CreatedAtUtc);
+
+public sealed record SetClinicPrimaryPhotoRequest(Guid PhotoId);
+
+public sealed record ClinicReviewDto(
+    Guid Id,
+    Guid ClinicId,
+    Guid AuthorUserId,
+    string AuthorName,
+    int Rating,
+    string? Comment,
+    DateTime CreatedAtUtc);
+
+public sealed class UpsertClinicReviewRequest
+{
+    [Range(1, 5)]
+    public int Rating { get; init; }
+    [MaxLength(1000)]
+    public string? Comment { get; init; }
+}
+
+public sealed record ClinicPublicProfileDto(
+    ClinicDto Clinic,
+    IReadOnlyList<ClinicServiceDto> Services,
+    IReadOnlyList<ClinicScheduleDto> Schedules,
+    IReadOnlyList<ProductDto> Products,
+    IReadOnlyList<string> Photos,
+    IReadOnlyList<ClinicPhotoDto> ClinicPhotos,
+    IReadOnlyList<AdoptablePetDto> AdoptablePets,
+    double AvgRating,
+    int ReviewCount,
+    IReadOnlyList<ClinicReviewDto> Reviews);
 
 public sealed record UpdateOrderStatusRequest(OrderStatus Status);

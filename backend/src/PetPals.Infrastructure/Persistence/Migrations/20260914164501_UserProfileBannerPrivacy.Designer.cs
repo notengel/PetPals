@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PetPals.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using PetPals.Infrastructure.Persistence;
 namespace PetPals.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914164501_UserProfileBannerPrivacy")]
+    partial class UserProfileBannerPrivacy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -368,10 +371,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
-                    b.Property<string>("BannerUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -384,10 +383,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
 
                     b.Property<double>("Latitude")
                         .HasColumnType("float");
-
-                    b.Property<string>("LogoUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
 
                     b.Property<double>("Longitude")
                         .HasColumnType("float");
@@ -720,110 +715,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
                     b.ToTable("Pets");
                 });
 
-            modelBuilder.Entity("PetPals.Domain.Entities.PetPhoto", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid>("PetId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PetId", "CreatedAtUtc");
-
-                    b.ToTable("PetPhotos");
-                });
-
-            modelBuilder.Entity("PetPals.Domain.Entities.AdoptablePetPhoto", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AdoptablePetId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AdoptablePetId", "CreatedAtUtc");
-
-                    b.ToTable("AdoptablePetPhotos");
-                });
-
-            modelBuilder.Entity("PetPals.Domain.Entities.ClinicPhoto", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ClinicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClinicId", "CreatedAtUtc");
-
-                    b.ToTable("ClinicPhotos");
-                });
-
-            modelBuilder.Entity("PetPals.Domain.Entities.ClinicReview", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AuthorUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ClinicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("Rating")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClinicId", "AuthorUserId")
-                        .IsUnique();
-
-                    b.HasIndex("ClinicId", "CreatedAtUtc");
-
-                    b.ToTable("ClinicReviews");
-                });
-
             modelBuilder.Entity("PetPals.Domain.Entities.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -935,10 +826,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
-                    b.Property<string>("BannerUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -951,10 +838,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
 
                     b.Property<double>("Latitude")
                         .HasColumnType("float");
-
-                    b.Property<string>("LogoUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
 
                     b.Property<double>("Longitude")
                         .HasColumnType("float");
@@ -1392,15 +1275,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("PetPals.Domain.Entities.PetPhoto", b =>
-                {
-                    b.HasOne("PetPals.Domain.Entities.Pet", null)
-                        .WithMany()
-                        .HasForeignKey("PetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("PetPals.Domain.Entities.Post", b =>
                 {
                     b.HasOne("PetPals.Infrastructure.Identity.ApplicationUser", null)
@@ -1463,39 +1337,6 @@ namespace PetPals.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AdoptablePetId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("PetPals.Domain.Entities.AdoptablePetPhoto", b =>
-                {
-                    b.HasOne("PetPals.Domain.Entities.AdoptablePet", null)
-                        .WithMany()
-                        .HasForeignKey("AdoptablePetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("PetPals.Domain.Entities.ClinicPhoto", b =>
-                {
-                    b.HasOne("PetPals.Domain.Entities.Clinic", null)
-                        .WithMany()
-                        .HasForeignKey("ClinicId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("PetPals.Domain.Entities.ClinicReview", b =>
-                {
-                    b.HasOne("PetPals.Domain.Entities.Clinic", null)
-                        .WithMany()
-                        .HasForeignKey("ClinicId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("PetPals.Infrastructure.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("AuthorUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PetPals.Application.Abstractions.Marketplace;
+using PetPals.Application.DTOs.Adoptions;
+using PetPals.Application.DTOs.Appointments;
 using PetPals.Application.DTOs.Marketplace;
 using PetPals.Domain.Entities;
 using PetPals.Domain.Enums;
@@ -20,10 +22,18 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
                 clinic.Description,
                 clinic.Phone,
                 clinic.Address,
+                clinic.LogoUrl,
+                clinic.BannerUrl,
                 clinic.Latitude,
                 clinic.Longitude,
                 clinic.IsVerified))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<ClinicDto?> GetClinicAsync(Guid clinicId, CancellationToken cancellationToken = default)
+    {
+        var clinic = await db.Clinics.AsNoTracking().SingleOrDefaultAsync(c => c.Id == clinicId, cancellationToken);
+        return clinic is null ? null : ToClinicDto(clinic);
     }
 
     public async Task<ClinicDto?> GetMyClinicAsync(
@@ -53,6 +63,8 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
         clinic.Description = request.Description?.Trim();
         clinic.Phone = request.Phone?.Trim();
         clinic.Address = request.Address?.Trim();
+        clinic.LogoUrl = request.LogoUrl?.Trim();
+        clinic.BannerUrl = request.BannerUrl?.Trim();
         clinic.Latitude = request.Latitude;
         clinic.Longitude = request.Longitude;
 
@@ -446,6 +458,132 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
         return new CartDto(cartId, items, items.Sum(item => item.Subtotal));
     }
 
+    public async Task<ClinicPublicProfileDto?> GetPublicProfileAsync(Guid clinicId, CancellationToken cancellationToken = default)
+    {
+        var clinic = await db.Clinics.AsNoTracking().SingleOrDefaultAsync(c => c.Id == clinicId, cancellationToken);
+        if (clinic is null) return null;
+        var services = await db.ClinicServices.AsNoTracking().Where(s => s.ClinicId == clinicId && s.IsActive)
+            .OrderBy(s => s.Name)
+            .Select(s => new ClinicServiceDto(s.Id, s.ClinicId, s.Name, s.Description, s.Price, s.DurationMinutes, s.IsActive))
+            .ToListAsync(cancellationToken);
+        var schedules = await db.ClinicSchedules.AsNoTracking().Where(s => s.ClinicId == clinicId)
+            .OrderBy(s => s.DayOfWeek).ThenBy(s => s.OpensAt)
+            .Select(s => new ClinicScheduleDto(s.Id, s.ClinicId, s.DayOfWeek, s.OpensAt, s.ClosesAt))
+            .ToListAsync(cancellationToken);
+        var products = await db.Products.AsNoTracking().Where(p => p.ClinicId == clinicId && p.IsActive)
+            .OrderBy(p => p.Name)
+            .Select(p => new ProductDto(p.Id, p.ClinicId, clinic.Name, p.Name, p.Description, p.Category, p.Price, p.Stock, p.ImageUrl, p.IsActive))
+            .ToListAsync(cancellationToken);
+        var shelterIds = await db.Shelters.AsNoTracking().Where(s => s.OwnerUserId == clinic.OwnerUserId)
+            .Select(s => s.Id).ToListAsync(cancellationToken);
+        var adoptablePets = shelterIds.Count == 0 ? new List<AdoptablePetDto>() : await (
+            from pet in db.AdoptablePets.AsNoTracking()
+            join shelter in db.Shelters.AsNoTracking() on pet.ShelterId equals shelter.Id
+            where shelterIds.Contains(pet.ShelterId) && pet.Status == AdoptablePetStatus.Available
+            orderby pet.CreatedAtUtc descending
+            select new AdoptablePetDto(pet.Id, pet.ShelterId, shelter.Name, pet.Name, pet.Species, pet.Breed,
+                pet.Sex, pet.ApproximateAge, pet.Description, pet.Status, pet.PrimaryImageUrl,
+                db.VaccinationRecords.AsNoTracking().Where(v => v.AdoptablePetId == pet.Id)
+                    .Select(v => new VaccinationRecordDto(v.Id, v.AdoptablePetId, v.VaccineName, v.AppliedOn, v.NextDueOn, v.Notes)).ToList(),
+                db.AdoptablePetPhotos.AsNoTracking().Where(ph => ph.AdoptablePetId == pet.Id)
+                    .OrderByDescending(ph => ph.CreatedAtUtc)
+                    .Select(ph => new AdoptablePetPhotoDto(ph.Id, ph.AdoptablePetId, ph.ImageUrl, ph.CreatedAtUtc)).ToList()))
+            .ToListAsync(cancellationToken);
+        var postMedia = await db.Posts.AsNoTracking().Where(p => p.AuthorUserId == clinic.OwnerUserId && p.IsVisible && p.MediaUrl != null)
+            .OrderByDescending(p => p.CreatedAtUtc).Take(20).Select(p => p.MediaUrl!).ToListAsync(cancellationToken);
+        var gallery = await db.ClinicPhotos.AsNoTracking().Where(photo => photo.ClinicId == clinicId)
+            .OrderByDescending(photo => photo.CreatedAtUtc)
+            .Select(photo => new ClinicPhotoDto(photo.Id, photo.ClinicId, photo.ImageUrl, photo.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+        // ponytail: grid = galería dedicada + lo ya subido (logo/banner/productos/posts)
+        var photos = gallery.Select(g => g.ImageUrl)
+            .Concat(new[] { clinic.LogoUrl, clinic.BannerUrl })
+            .Concat(products.Where(p => !string.IsNullOrWhiteSpace(p.ImageUrl)).Select(p => p.ImageUrl!))
+            .Concat(postMedia)
+            .Concat(adoptablePets.SelectMany(p => new[] { p.PrimaryImageUrl }.Concat(p.Photos.Select(ph => ph.ImageUrl))))
+            .Where(url => !string.IsNullOrWhiteSpace(url)).OfType<string>().Distinct().Take(30).ToList();
+        var reviews = await QueryReviews(db.ClinicReviews.AsNoTracking().Where(r => r.ClinicId == clinicId), cancellationToken);
+        var avg = reviews.Count == 0 ? 0 : reviews.Average(r => r.Rating);
+        return new ClinicPublicProfileDto(ToClinicDto(clinic), services, schedules, products, photos, gallery, adoptablePets, avg, reviews.Count, reviews.Take(20).ToList());
+    }
+
+    public async Task<IReadOnlyList<ClinicPhotoDto>> GetClinicPhotosAsync(Guid clinicId, CancellationToken cancellationToken = default) =>
+        await db.ClinicPhotos.AsNoTracking().Where(photo => photo.ClinicId == clinicId)
+            .OrderByDescending(photo => photo.CreatedAtUtc)
+            .Select(photo => new ClinicPhotoDto(photo.Id, photo.ClinicId, photo.ImageUrl, photo.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+
+    public async Task<ClinicPhotoDto?> AddClinicPhotoAsync(Guid userId, string imageUrl, CancellationToken cancellationToken = default)
+    {
+        var clinic = await db.Clinics.SingleOrDefaultAsync(c => c.OwnerUserId == userId, cancellationToken);
+        if (clinic is null) return null;
+        var photo = new ClinicPhoto { ClinicId = clinic.Id, ImageUrl = imageUrl.Trim() };
+        db.ClinicPhotos.Add(photo);
+        if (string.IsNullOrWhiteSpace(clinic.LogoUrl)) clinic.LogoUrl = photo.ImageUrl; // ponytail: primera foto = logo
+        await db.SaveChangesAsync(cancellationToken);
+        return new ClinicPhotoDto(photo.Id, photo.ClinicId, photo.ImageUrl, photo.CreatedAtUtc);
+    }
+
+    public async Task<bool> DeleteClinicPhotoAsync(Guid userId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        var photo = await (from p in db.ClinicPhotos
+                           join c in db.Clinics on p.ClinicId equals c.Id
+                           where p.Id == photoId && c.OwnerUserId == userId
+                           select p).SingleOrDefaultAsync(cancellationToken);
+        if (photo is null) return false;
+        db.ClinicPhotos.Remove(photo);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<ClinicDto?> SetClinicPrimaryPhotoAsync(Guid userId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        var clinic = await db.Clinics.SingleOrDefaultAsync(c => c.OwnerUserId == userId, cancellationToken);
+        var photo = clinic is null ? null
+            : await db.ClinicPhotos.AsNoTracking().SingleOrDefaultAsync(p => p.Id == photoId && p.ClinicId == clinic.Id, cancellationToken);
+        if (clinic is null || photo is null) return null;
+        clinic.LogoUrl = photo.ImageUrl;
+        await db.SaveChangesAsync(cancellationToken);
+        return ToClinicDto(clinic);
+    }
+
+    public async Task<IReadOnlyList<ClinicReviewDto>> GetClinicReviewsAsync(Guid clinicId, CancellationToken cancellationToken = default) =>
+        await QueryReviews(db.ClinicReviews.AsNoTracking().Where(review => review.ClinicId == clinicId), cancellationToken);
+
+    public async Task<MarketplaceResult<ClinicReviewDto>> SaveReviewAsync(Guid userId, Guid clinicId, UpsertClinicReviewRequest request, CancellationToken cancellationToken = default)
+    {
+        var clinic = await db.Clinics.AsNoTracking().SingleOrDefaultAsync(c => c.Id == clinicId, cancellationToken);
+        if (clinic is null) return MarketplaceResult<ClinicReviewDto>.Failure("The clinic was not found.");
+        if (clinic.OwnerUserId == userId) return MarketplaceResult<ClinicReviewDto>.Failure("You cannot review your own clinic.");
+        var review = await db.ClinicReviews.SingleOrDefaultAsync(r => r.ClinicId == clinicId && r.AuthorUserId == userId, cancellationToken);
+        if (review is null)
+        {
+            review = new ClinicReview { ClinicId = clinicId, AuthorUserId = userId };
+            db.ClinicReviews.Add(review);
+        }
+        review.Rating = request.Rating;
+        review.Comment = request.Comment?.Trim();
+        await db.SaveChangesAsync(cancellationToken);
+        return MarketplaceResult<ClinicReviewDto>.Success((await QueryReviews(
+            db.ClinicReviews.AsNoTracking().Where(r => r.Id == review.Id), cancellationToken)).Single());
+    }
+
+    public async Task<bool> DeleteReviewAsync(Guid userId, Guid reviewId, CancellationToken cancellationToken = default)
+    {
+        var review = await db.ClinicReviews.SingleOrDefaultAsync(r => r.Id == reviewId && r.AuthorUserId == userId, cancellationToken);
+        if (review is null) return false;
+        db.ClinicReviews.Remove(review);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task<List<ClinicReviewDto>> QueryReviews(IQueryable<ClinicReview> query, CancellationToken cancellationToken) =>
+        await (from review in query
+               join author in db.Users.AsNoTracking() on review.AuthorUserId equals author.Id
+               orderby review.CreatedAtUtc descending
+               select new ClinicReviewDto(review.Id, review.ClinicId, review.AuthorUserId, author.DisplayName,
+                   review.Rating, review.Comment, review.CreatedAtUtc)).ToListAsync(cancellationToken);
+
     private static void ApplyProduct(Product product, ProductRequest request)
     {
         product.Name = request.Name.Trim();
@@ -458,7 +596,7 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
     }
 
     private static ClinicDto ToClinicDto(Clinic clinic) =>
-        new(clinic.Id, clinic.Name, clinic.Description, clinic.Phone, clinic.Address, clinic.Latitude, clinic.Longitude, clinic.IsVerified);
+        new(clinic.Id, clinic.Name, clinic.Description, clinic.Phone, clinic.Address, clinic.LogoUrl, clinic.BannerUrl, clinic.Latitude, clinic.Longitude, clinic.IsVerified);
 
     private static ProductDto ToProductDto(Product product, string clinicName) =>
         new(product.Id, product.ClinicId, clinicName, product.Name, product.Description, product.Category, product.Price, product.Stock, product.ImageUrl, product.IsActive);

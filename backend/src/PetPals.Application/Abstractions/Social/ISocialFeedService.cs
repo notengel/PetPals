@@ -5,14 +5,20 @@ namespace PetPals.Application.Abstractions.Social;
 public interface ISocialFeedService
 {
     Task<UserProfileDto> GetProfileAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<UserProfileDto?> GetPublicProfileAsync(Guid viewerUserId, Guid targetUserId, CancellationToken cancellationToken = default);
     Task<UserProfileDto> UpdateProfileAsync(Guid userId, UpdateProfileRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<PetDto>> GetMyPetsAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<PetDto> CreatePetAsync(Guid userId, CreatePetRequest request, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PetPhotoDto>> GetPetPhotosAsync(Guid userId, Guid petId, CancellationToken cancellationToken = default);
+    Task<PetPhotoDto?> AddPetPhotoAsync(Guid userId, Guid petId, string imageUrl, CancellationToken cancellationToken = default);
+    Task<bool> DeletePetPhotoAsync(Guid userId, Guid petId, Guid photoId, CancellationToken cancellationToken = default);
+    Task<PetDto?> SetPetPrimaryPhotoAsync(Guid userId, Guid petId, Guid photoId, CancellationToken cancellationToken = default);
     Task<PetDto?> UpdatePetAsync(Guid userId, Guid petId, UpdatePetRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeletePetAsync(Guid userId, Guid petId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<FeedPostDto>> GetFeedAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<FeedPostDto>> GetUserPostsAsync(Guid viewerUserId, Guid targetUserId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<FeedPostDto?> CreatePostAsync(Guid userId, CreatePostRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeletePostAsync(Guid userId, Guid postId, CancellationToken cancellationToken = default);
     Task<bool> AddLikeAsync(Guid userId, Guid postId, CancellationToken cancellationToken = default);

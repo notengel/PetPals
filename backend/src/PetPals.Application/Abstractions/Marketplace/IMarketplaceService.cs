@@ -6,6 +6,15 @@ namespace PetPals.Application.Abstractions.Marketplace;
 public interface IMarketplaceService
 {
     Task<IReadOnlyList<ClinicDto>> GetClinicsAsync(CancellationToken cancellationToken = default);
+    Task<ClinicDto?> GetClinicAsync(Guid clinicId, CancellationToken cancellationToken = default);
+    Task<ClinicPublicProfileDto?> GetPublicProfileAsync(Guid clinicId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ClinicPhotoDto>> GetClinicPhotosAsync(Guid clinicId, CancellationToken cancellationToken = default);
+    Task<ClinicPhotoDto?> AddClinicPhotoAsync(Guid userId, string imageUrl, CancellationToken cancellationToken = default);
+    Task<bool> DeleteClinicPhotoAsync(Guid userId, Guid photoId, CancellationToken cancellationToken = default);
+    Task<ClinicDto?> SetClinicPrimaryPhotoAsync(Guid userId, Guid photoId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ClinicReviewDto>> GetClinicReviewsAsync(Guid clinicId, CancellationToken cancellationToken = default);
+    Task<MarketplaceResult<ClinicReviewDto>> SaveReviewAsync(Guid userId, Guid clinicId, UpsertClinicReviewRequest request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteReviewAsync(Guid userId, Guid reviewId, CancellationToken cancellationToken = default);
     Task<ClinicDto?> GetMyClinicAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<ClinicDto> SaveMyClinicAsync(Guid userId, UpsertClinicRequest request, CancellationToken cancellationToken = default);
 

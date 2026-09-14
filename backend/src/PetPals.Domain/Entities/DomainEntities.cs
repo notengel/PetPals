@@ -14,6 +14,8 @@ public class UserProfile : Entity
     public string DisplayName { get; set; } = string.Empty;
     public string? Bio { get; set; }
     public string? AvatarUrl { get; set; }
+    public string? BannerUrl { get; set; }
+    public bool IsPublic { get; set; } = true;
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 }
@@ -25,9 +27,25 @@ public class Clinic : Entity
     public string? Description { get; set; }
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public string? LogoUrl { get; set; }
+    public string? BannerUrl { get; set; }
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public bool IsVerified { get; set; }
+}
+
+public class ClinicPhoto : Entity
+{
+    public Guid ClinicId { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+}
+
+public class ClinicReview : Entity
+{
+    public Guid ClinicId { get; set; }
+    public Guid AuthorUserId { get; set; }
+    public int Rating { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class Shelter : Entity
@@ -37,6 +55,8 @@ public class Shelter : Entity
     public string? Description { get; set; }
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public string? LogoUrl { get; set; }
+    public string? BannerUrl { get; set; }
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public bool IsVerified { get; set; }
@@ -52,6 +72,12 @@ public class Pet : Entity
     public string? Sex { get; set; }
     public string? Description { get; set; }
     public string? PrimaryImageUrl { get; set; }
+}
+
+public class PetPhoto : Entity
+{
+    public Guid PetId { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
 }
 
 public class Post : Entity
@@ -186,6 +212,12 @@ public class VaccinationRecord : Entity
     public DateOnly AppliedOn { get; set; }
     public DateOnly? NextDueOn { get; set; }
     public string? Notes { get; set; }
+}
+
+public class AdoptablePetPhoto : Entity
+{
+    public Guid AdoptablePetId { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
 }
 
 public class AdoptionRequest : Entity

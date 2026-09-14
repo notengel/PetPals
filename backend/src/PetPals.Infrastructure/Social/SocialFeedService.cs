@@ -18,7 +18,7 @@ public sealed class SocialFeedService(ApplicationDbContext db) : ISocialFeedServ
             .SingleOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
 
         return profile is null
-            ? new UserProfileDto(userId, user.DisplayName, null, null, null, null)
+            ? new UserProfileDto(userId, user.DisplayName, null, null, null, true, null, null)
             : ToDto(profile);
     }
 
@@ -40,12 +40,50 @@ public sealed class SocialFeedService(ApplicationDbContext db) : ISocialFeedServ
         profile.DisplayName = request.DisplayName.Trim();
         profile.Bio = request.Bio?.Trim();
         profile.AvatarUrl = request.AvatarUrl?.Trim();
+        profile.BannerUrl = request.BannerUrl?.Trim();
+        if (request.IsPublic.HasValue) profile.IsPublic = request.IsPublic.Value;
         profile.Latitude = request.Latitude;
         profile.Longitude = request.Longitude;
         user.DisplayName = profile.DisplayName;
 
         await db.SaveChangesAsync(cancellationToken);
         return ToDto(profile);
+    }
+
+    public async Task<UserProfileDto?> GetPublicProfileAsync(
+        Guid viewerUserId,
+        Guid targetUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var profile = await db.UserProfiles.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.UserId == targetUserId, cancellationToken);
+        if (profile is null)
+        {
+            var user = await db.Users.AsNoTracking()
+                .SingleOrDefaultAsync(u => u.Id == targetUserId, cancellationToken);
+            return user is null ? null : new UserProfileDto(targetUserId, user.DisplayName, null, null, null, true, null, null);
+        }
+        if (!profile.IsPublic && viewerUserId != targetUserId) return null;
+        return ToDto(profile);
+    }
+
+    public async Task<IReadOnlyList<FeedPostDto>> GetUserPostsAsync(
+        Guid viewerUserId,
+        Guid targetUserId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var profile = await db.UserProfiles.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.UserId == targetUserId, cancellationToken);
+        if (profile is not null && !profile.IsPublic && viewerUserId != targetUserId)
+            return [];
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        return await QueryPosts(viewerUserId).Where(p => p.AuthorUserId == targetUserId)
+            .OrderByDescending(p => p.CreatedAtUtc)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<PetDto>> GetMyPetsAsync(
@@ -135,6 +173,65 @@ public sealed class SocialFeedService(ApplicationDbContext db) : ISocialFeedServ
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    public async Task<IReadOnlyList<PetPhotoDto>> GetPetPhotosAsync(
+        Guid userId,
+        Guid petId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await OwnsPetAsync(userId, petId, cancellationToken)) return [];
+        return await db.PetPhotos.AsNoTracking()
+            .Where(photo => photo.PetId == petId)
+            .OrderByDescending(photo => photo.CreatedAtUtc)
+            .Select(photo => new PetPhotoDto(photo.Id, photo.PetId, photo.ImageUrl, photo.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PetPhotoDto?> AddPetPhotoAsync(
+        Guid userId,
+        Guid petId,
+        string imageUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var pet = await db.Pets.SingleOrDefaultAsync(p => p.Id == petId && p.OwnerUserId == userId, cancellationToken);
+        if (pet is null) return null;
+        var photo = new PetPhoto { PetId = petId, ImageUrl = imageUrl.Trim() };
+        db.PetPhotos.Add(photo);
+        if (string.IsNullOrWhiteSpace(pet.PrimaryImageUrl)) pet.PrimaryImageUrl = photo.ImageUrl; // ponytail: primera foto = perfil
+        await db.SaveChangesAsync(cancellationToken);
+        return new PetPhotoDto(photo.Id, photo.PetId, photo.ImageUrl, photo.CreatedAtUtc);
+    }
+
+    public async Task<bool> DeletePetPhotoAsync(
+        Guid userId,
+        Guid petId,
+        Guid photoId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await OwnsPetAsync(userId, petId, cancellationToken)) return false;
+        var photo = await db.PetPhotos.SingleOrDefaultAsync(p => p.Id == photoId && p.PetId == petId, cancellationToken);
+        if (photo is null) return false;
+        db.PetPhotos.Remove(photo);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<PetDto?> SetPetPrimaryPhotoAsync(
+        Guid userId,
+        Guid petId,
+        Guid photoId,
+        CancellationToken cancellationToken = default)
+    {
+        var pet = await db.Pets.SingleOrDefaultAsync(p => p.Id == petId && p.OwnerUserId == userId, cancellationToken);
+        var photo = await db.PetPhotos.AsNoTracking().SingleOrDefaultAsync(p => p.Id == photoId && p.PetId == petId, cancellationToken);
+        if (pet is null || photo is null) return null;
+        pet.PrimaryImageUrl = photo.ImageUrl;
+        await db.SaveChangesAsync(cancellationToken);
+        return ToDto(pet);
+    }
+
+    private async Task<bool> OwnsPetAsync(Guid userId, Guid petId, CancellationToken cancellationToken) =>
+        await db.Pets.AnyAsync(pet => pet.Id == petId && pet.OwnerUserId == userId, cancellationToken);
 
     public async Task<IReadOnlyList<FeedPostDto>> GetFeedAsync(
         Guid userId,
@@ -371,8 +468,27 @@ public sealed class SocialFeedService(ApplicationDbContext db) : ISocialFeedServ
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    private IQueryable<FeedPostDto> QueryPosts(Guid userId) =>
+        from post in db.Posts.AsNoTracking()
+        join author in db.Users.AsNoTracking() on post.AuthorUserId equals author.Id
+        join pet in db.Pets.AsNoTracking() on post.PetId equals pet.Id into petGroup
+        from pet in petGroup.DefaultIfEmpty()
+        where post.IsVisible
+        select new FeedPostDto(
+            post.Id,
+            post.AuthorUserId,
+            author.DisplayName,
+            post.PetId,
+            pet == null ? null : pet.Name,
+            post.Content,
+            post.MediaUrl,
+            post.CreatedAtUtc,
+            db.PostLikes.Count(like => like.PostId == post.Id),
+            db.Comments.Count(comment => comment.PostId == post.Id),
+            db.PostLikes.Any(like => like.PostId == post.Id && like.UserId == userId));
+
     private static UserProfileDto ToDto(UserProfile profile) =>
-        new(profile.UserId, profile.DisplayName, profile.Bio, profile.AvatarUrl, profile.Latitude, profile.Longitude);
+        new(profile.UserId, profile.DisplayName, profile.Bio, profile.AvatarUrl, profile.BannerUrl, profile.IsPublic, profile.Latitude, profile.Longitude);
 
     private static PetDto ToDto(Pet pet) =>
         new(pet.Id, pet.OwnerUserId, pet.Name, pet.Species, pet.Breed, pet.BirthDate, pet.Sex, pet.Description, pet.PrimaryImageUrl);

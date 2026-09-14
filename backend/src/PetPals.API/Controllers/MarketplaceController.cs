@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PetPals.Application.Abstractions.Marketplace;
+using PetPals.Application.Abstractions.Storage;
 using PetPals.Application.DTOs.Marketplace;
 using PetPals.Domain.Enums;
 using System.Security.Claims;
@@ -10,13 +11,70 @@ namespace PetPals.API.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/marketplace")]
-public sealed class MarketplaceController(IMarketplaceService marketplaceService) : ControllerBase
+public sealed class MarketplaceController(IMarketplaceService marketplaceService, IFileStorage files) : ControllerBase
 {
     [HttpGet("clinics")]
     public async Task<ActionResult<IReadOnlyList<ClinicDto>>> GetClinics(CancellationToken cancellationToken)
     {
         return Ok(await marketplaceService.GetClinicsAsync(cancellationToken));
     }
+
+    [HttpGet("clinics/{clinicId:guid}")]
+    public async Task<ActionResult<ClinicDto>> GetClinic(Guid clinicId, CancellationToken cancellationToken)
+    {
+        var clinic = await marketplaceService.GetClinicAsync(clinicId, cancellationToken);
+        return clinic is null ? NotFound() : Ok(clinic);
+    }
+
+    [HttpGet("clinics/{clinicId:guid}/profile")]
+    public async Task<ActionResult<ClinicPublicProfileDto>> GetClinicProfile(Guid clinicId, CancellationToken cancellationToken)
+    {
+        var profile = await marketplaceService.GetPublicProfileAsync(clinicId, cancellationToken);
+        return profile is null ? NotFound() : Ok(profile);
+    }
+
+    [HttpGet("clinics/{clinicId:guid}/photos")]
+    public async Task<ActionResult<IReadOnlyList<ClinicPhotoDto>>> GetClinicPhotos(Guid clinicId, CancellationToken cancellationToken) =>
+        Ok(await marketplaceService.GetClinicPhotosAsync(clinicId, cancellationToken));
+
+    [HttpPost("clinics/me/photos")]
+    [Authorize(Roles = "Clinic")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<ClinicPhotoDto>> AddClinicPhoto(IFormFile file, CancellationToken cancellationToken)
+    {
+        await using var stream = file.OpenReadStream();
+        var url = await files.SaveAsync(stream, file.FileName, file.ContentType, cancellationToken);
+        var photo = await marketplaceService.AddClinicPhotoAsync(CurrentUserId(), url, cancellationToken);
+        return photo is null ? BadRequest("Create your clinic profile first.") : Ok(photo);
+    }
+
+    [HttpDelete("clinics/me/photos/{photoId:guid}")]
+    [Authorize(Roles = "Clinic")]
+    public async Task<IActionResult> DeleteClinicPhoto(Guid photoId, CancellationToken cancellationToken) =>
+        await marketplaceService.DeleteClinicPhotoAsync(CurrentUserId(), photoId, cancellationToken) ? NoContent() : NotFound();
+
+    [HttpPut("clinics/me/primary")]
+    [Authorize(Roles = "Clinic")]
+    public async Task<ActionResult<ClinicDto>> SetClinicPrimaryPhoto(SetClinicPrimaryPhotoRequest request, CancellationToken cancellationToken)
+    {
+        var clinic = await marketplaceService.SetClinicPrimaryPhotoAsync(CurrentUserId(), request.PhotoId, cancellationToken);
+        return clinic is null ? NotFound() : Ok(clinic);
+    }
+
+    [HttpGet("clinics/{clinicId:guid}/reviews")]
+    public async Task<ActionResult<IReadOnlyList<ClinicReviewDto>>> GetClinicReviews(Guid clinicId, CancellationToken cancellationToken) =>
+        Ok(await marketplaceService.GetClinicReviewsAsync(clinicId, cancellationToken));
+
+    [HttpPost("clinics/{clinicId:guid}/reviews")]
+    public async Task<ActionResult<ClinicReviewDto>> SaveReview(Guid clinicId, UpsertClinicReviewRequest request, CancellationToken cancellationToken)
+    {
+        var result = await marketplaceService.SaveReviewAsync(CurrentUserId(), clinicId, request, cancellationToken);
+        return result.Succeeded ? Ok(result.Data) : BadRequest(result.Error);
+    }
+
+    [HttpDelete("reviews/{reviewId:guid}")]
+    public async Task<IActionResult> DeleteReview(Guid reviewId, CancellationToken cancellationToken) =>
+        await marketplaceService.DeleteReviewAsync(CurrentUserId(), reviewId, cancellationToken) ? NoContent() : NotFound();
 
     [HttpGet("clinics/me")]
     [Authorize(Roles = "Clinic")]
@@ -34,6 +92,18 @@ public sealed class MarketplaceController(IMarketplaceService marketplaceService
     {
         return Ok(await marketplaceService.SaveMyClinicAsync(CurrentUserId(), request, cancellationToken));
     }
+
+    [HttpPost("clinics/me/logo")]
+    [Authorize(Roles = "Clinic")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<ClinicDto>> UploadClinicLogo(IFormFile file, CancellationToken cancellationToken)
+        => Ok(await SaveClinicPhotoAsync(CurrentUserId(), file, isLogo: true, cancellationToken));
+
+    [HttpPost("clinics/me/banner")]
+    [Authorize(Roles = "Clinic")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<ClinicDto>> UploadClinicBanner(IFormFile file, CancellationToken cancellationToken)
+        => Ok(await SaveClinicPhotoAsync(CurrentUserId(), file, isLogo: false, cancellationToken));
 
     [HttpGet("products")]
     public async Task<ActionResult<IReadOnlyList<ProductDto>>> GetProducts(
@@ -146,6 +216,20 @@ public sealed class MarketplaceController(IMarketplaceService marketplaceService
     {
         var result = await marketplaceService.UpdateOrderStatusAsync(CurrentUserId(), orderId, request.Status, cancellationToken);
         return result.Succeeded ? Ok(result.Data) : BadRequest(result.Error);
+    }
+
+    private async Task<ClinicDto> SaveClinicPhotoAsync(Guid userId, IFormFile file, bool isLogo, CancellationToken cancellationToken)
+    {
+        var current = await marketplaceService.GetMyClinicAsync(userId, cancellationToken)
+            ?? new ClinicDto(Guid.Empty, string.Empty, null, null, null, null, null, 0, 0, false);
+        await using var stream = file.OpenReadStream();
+        var url = await files.SaveAsync(stream, file.FileName, file.ContentType, cancellationToken);
+        return await marketplaceService.SaveMyClinicAsync(userId, new UpsertClinicRequest
+        {
+            Name = current.Name, Description = current.Description, Phone = current.Phone, Address = current.Address,
+            LogoUrl = isLogo ? url : current.LogoUrl, BannerUrl = isLogo ? current.BannerUrl : url,
+            Latitude = current.Latitude, Longitude = current.Longitude
+        }, cancellationToken);
     }
 
     private Guid CurrentUserId() =>

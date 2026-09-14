@@ -12,11 +12,14 @@ public class ApplicationDbContext(
 {
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<Pet> Pets => Set<Pet>();
+    public DbSet<PetPhoto> PetPhotos => Set<PetPhoto>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<PostLike> PostLikes => Set<PostLike>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Clinic> Clinics => Set<Clinic>();
+    public DbSet<ClinicPhoto> ClinicPhotos => Set<ClinicPhoto>();
+    public DbSet<ClinicReview> ClinicReviews => Set<ClinicReview>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
@@ -29,6 +32,7 @@ public class ApplicationDbContext(
     public DbSet<Shelter> Shelters => Set<Shelter>();
     public DbSet<AdoptablePet> AdoptablePets => Set<AdoptablePet>();
     public DbSet<VaccinationRecord> VaccinationRecords => Set<VaccinationRecord>();
+    public DbSet<AdoptablePetPhoto> AdoptablePetPhotos => Set<AdoptablePetPhoto>();
     public DbSet<AdoptionRequest> AdoptionRequests => Set<AdoptionRequest>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationParticipant> ConversationParticipants => Set<ConversationParticipant>();
@@ -45,6 +49,8 @@ public class ApplicationDbContext(
             entity.Property(profile => profile.DisplayName).HasMaxLength(100).IsRequired();
             entity.Property(profile => profile.Bio).HasMaxLength(500);
             entity.Property(profile => profile.AvatarUrl).HasMaxLength(500);
+            entity.Property(profile => profile.BannerUrl).HasMaxLength(500);
+            entity.Property(profile => profile.IsPublic).HasDefaultValue(true);
             entity.HasOne<ApplicationUser>()
                 .WithOne()
                 .HasForeignKey<UserProfile>(profile => profile.UserId)
@@ -64,6 +70,17 @@ public class ApplicationDbContext(
                 .WithMany()
                 .HasForeignKey(pet => pet.OwnerUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PetPhoto>(entity =>
+        {
+            entity.HasKey(photo => photo.Id);
+            entity.Property(photo => photo.ImageUrl).HasMaxLength(500).IsRequired();
+            entity.HasOne<Pet>()
+                .WithMany()
+                .HasForeignKey(photo => photo.PetId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(photo => new { photo.PetId, photo.CreatedAtUtc });
         });
 
         modelBuilder.Entity<Post>(entity =>
@@ -131,10 +148,39 @@ public class ApplicationDbContext(
             entity.Property(clinic => clinic.Description).HasMaxLength(1000);
             entity.Property(clinic => clinic.Phone).HasMaxLength(30);
             entity.Property(clinic => clinic.Address).HasMaxLength(300);
+            entity.Property(clinic => clinic.LogoUrl).HasMaxLength(500);
+            entity.Property(clinic => clinic.BannerUrl).HasMaxLength(500);
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(clinic => clinic.OwnerUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ClinicPhoto>(entity =>
+        {
+            entity.HasKey(photo => photo.Id);
+            entity.Property(photo => photo.ImageUrl).HasMaxLength(500).IsRequired();
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(photo => photo.ClinicId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(photo => new { photo.ClinicId, photo.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<ClinicReview>(entity =>
+        {
+            entity.HasKey(review => review.Id);
+            entity.Property(review => review.Comment).HasMaxLength(1000);
+            entity.HasOne<Clinic>()
+                .WithMany()
+                .HasForeignKey(review => review.ClinicId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(review => review.AuthorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(review => new { review.ClinicId, review.AuthorUserId }).IsUnique();
+            entity.HasIndex(review => new { review.ClinicId, review.CreatedAtUtc });
         });
 
         modelBuilder.Entity<Product>(entity =>
@@ -278,6 +324,8 @@ public class ApplicationDbContext(
             entity.Property(shelter => shelter.Description).HasMaxLength(1000);
             entity.Property(shelter => shelter.Phone).HasMaxLength(30);
             entity.Property(shelter => shelter.Address).HasMaxLength(300);
+            entity.Property(shelter => shelter.LogoUrl).HasMaxLength(500);
+            entity.Property(shelter => shelter.BannerUrl).HasMaxLength(500);
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(shelter => shelter.OwnerUserId)
@@ -312,6 +360,17 @@ public class ApplicationDbContext(
                 .HasForeignKey(record => record.AdoptablePetId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(record => new { record.AdoptablePetId, record.AppliedOn });
+        });
+
+        modelBuilder.Entity<AdoptablePetPhoto>(entity =>
+        {
+            entity.HasKey(photo => photo.Id);
+            entity.Property(photo => photo.ImageUrl).HasMaxLength(500).IsRequired();
+            entity.HasOne<AdoptablePet>()
+                .WithMany()
+                .HasForeignKey(photo => photo.AdoptablePetId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(photo => new { photo.AdoptablePetId, photo.CreatedAtUtc });
         });
 
         modelBuilder.Entity<AdoptionRequest>(entity =>

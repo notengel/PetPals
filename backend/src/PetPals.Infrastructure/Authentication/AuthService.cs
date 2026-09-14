@@ -93,6 +93,26 @@ public sealed class AuthService(
         return AuthResult.Success(CreateAuthResponse(user, normalizedEmail, role));
     }
 
+    public async Task<(bool Succeeded, string? Error)> ChangeEmailAsync(Guid userId, string newEmail, CancellationToken cancellationToken = default)
+    {
+        var email = newEmail.Trim();
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return (false, "Account not found.");
+        if (await userManager.FindByEmailAsync(email) is not null) return (false, "An account with this email already exists.");
+        var emailResult = await userManager.SetEmailAsync(user, email);
+        if (!emailResult.Succeeded) return (false, string.Join(", ", emailResult.Errors.Select(e => e.Description)));
+        var nameResult = await userManager.SetUserNameAsync(user, email);
+        return nameResult.Succeeded ? (true, null) : (false, string.Join(", ", nameResult.Errors.Select(e => e.Description)));
+    }
+
+    public async Task<(bool Succeeded, string? Error)> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return (false, "Account not found.");
+        var result = await userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        return result.Succeeded ? (true, null) : (false, string.Join(", ", result.Errors.Select(e => e.Description)));
+    }
+
     private AuthResponse CreateAuthResponse(ApplicationUser user, string email, string role)
     {
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(_jwt.ExpirationMinutes);

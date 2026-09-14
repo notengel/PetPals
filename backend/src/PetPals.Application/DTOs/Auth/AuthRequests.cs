@@ -27,3 +27,20 @@ public sealed class LoginRequest
     [Required]
     public string Password { get; init; } = string.Empty;
 }
+
+public sealed class ChangeEmailRequest
+{
+    [Required]
+    [EmailAddress]
+    public string NewEmail { get; init; } = string.Empty;
+}
+
+public sealed class ChangePasswordRequest
+{
+    [Required]
+    public string CurrentPassword { get; init; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string NewPassword { get; init; } = string.Empty;
+}

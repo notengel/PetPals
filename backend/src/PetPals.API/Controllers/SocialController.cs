@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PetPals.Application.Abstractions.Social;
+using PetPals.Application.Abstractions.Storage;
 using PetPals.Application.DTOs.Social;
 
 namespace PetPals.API.Controllers;
@@ -9,12 +10,59 @@ namespace PetPals.API.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/social")]
-public sealed class SocialController(ISocialFeedService socialFeedService) : ControllerBase
+public sealed class SocialController(ISocialFeedService socialFeedService, IFileStorage files) : ControllerBase
 {
     [HttpGet("profile/me")]
     public async Task<ActionResult<UserProfileDto>> GetMyProfile(CancellationToken cancellationToken)
     {
         return Ok(await socialFeedService.GetProfileAsync(CurrentUserId(), cancellationToken));
+    }
+
+    [HttpGet("profile/{userId:guid}")]
+    public async Task<ActionResult<UserProfileDto>> GetProfile(Guid userId, CancellationToken cancellationToken)
+    {
+        var profile = await socialFeedService.GetPublicProfileAsync(CurrentUserId(), userId, cancellationToken);
+        return profile is null ? NotFound() : Ok(profile);
+    }
+
+    [HttpGet("profile/me/posts")]
+    public async Task<ActionResult<IReadOnlyList<FeedPostDto>>> GetMyPosts(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        var me = CurrentUserId();
+        return Ok(await socialFeedService.GetUserPostsAsync(me, me, page, pageSize, cancellationToken));
+    }
+
+    [HttpPost("profile/me/avatar")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<UserProfileDto>> UploadAvatar(IFormFile file, CancellationToken cancellationToken)
+    {
+        var me = CurrentUserId();
+        var current = await socialFeedService.GetProfileAsync(me, cancellationToken);
+        await using var stream = file.OpenReadStream();
+        var url = await files.SaveAsync(stream, file.FileName, file.ContentType, cancellationToken);
+        return Ok(await socialFeedService.UpdateProfileAsync(me, new UpdateProfileRequest
+        {
+            DisplayName = current.DisplayName, Bio = current.Bio, AvatarUrl = url,
+            BannerUrl = current.BannerUrl, IsPublic = current.IsPublic,
+            Latitude = current.Latitude, Longitude = current.Longitude
+        }, cancellationToken));
+    }
+
+    [HttpPost("profile/me/banner")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<UserProfileDto>> UploadBanner(IFormFile file, CancellationToken cancellationToken)
+    {
+        var me = CurrentUserId();
+        var current = await socialFeedService.GetProfileAsync(me, cancellationToken);
+        await using var stream = file.OpenReadStream();
+        var url = await files.SaveAsync(stream, file.FileName, file.ContentType, cancellationToken);
+        return Ok(await socialFeedService.UpdateProfileAsync(me, new UpdateProfileRequest
+        {
+            DisplayName = current.DisplayName, Bio = current.Bio, AvatarUrl = current.AvatarUrl,
+            BannerUrl = url, IsPublic = current.IsPublic,
+            Latitude = current.Latitude, Longitude = current.Longitude
+        }, cancellationToken));
     }
 
     [HttpPut("profile/me")]
@@ -56,6 +104,31 @@ public sealed class SocialController(ISocialFeedService socialFeedService) : Con
         return await socialFeedService.DeletePetAsync(CurrentUserId(), petId, cancellationToken)
             ? NoContent()
             : NotFound();
+    }
+
+    [HttpGet("pets/{petId:guid}/photos")]
+    public async Task<ActionResult<IReadOnlyList<PetPhotoDto>>> GetPetPhotos(Guid petId, CancellationToken cancellationToken) =>
+        Ok(await socialFeedService.GetPetPhotosAsync(CurrentUserId(), petId, cancellationToken));
+
+    [HttpPost("pets/{petId:guid}/photos")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<PetPhotoDto>> AddPetPhoto(Guid petId, IFormFile file, CancellationToken cancellationToken)
+    {
+        await using var stream = file.OpenReadStream();
+        var url = await files.SaveAsync(stream, file.FileName, file.ContentType, cancellationToken);
+        var photo = await socialFeedService.AddPetPhotoAsync(CurrentUserId(), petId, url, cancellationToken);
+        return photo is null ? NotFound() : Ok(photo);
+    }
+
+    [HttpDelete("pets/{petId:guid}/photos/{photoId:guid}")]
+    public async Task<IActionResult> DeletePetPhoto(Guid petId, Guid photoId, CancellationToken cancellationToken) =>
+        await socialFeedService.DeletePetPhotoAsync(CurrentUserId(), petId, photoId, cancellationToken) ? NoContent() : NotFound();
+
+    [HttpPut("pets/{petId:guid}/primary")]
+    public async Task<ActionResult<PetDto>> SetPetPrimaryPhoto(Guid petId, SetPetPrimaryPhotoRequest request, CancellationToken cancellationToken)
+    {
+        var pet = await socialFeedService.SetPetPrimaryPhotoAsync(CurrentUserId(), petId, request.PhotoId, cancellationToken);
+        return pet is null ? NotFound() : Ok(pet);
     }
 
     [HttpGet("feed")]

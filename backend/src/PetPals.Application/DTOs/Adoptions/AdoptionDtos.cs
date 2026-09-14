@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using PetPals.Domain.Enums;
 
 namespace PetPals.Application.DTOs.Adoptions;
@@ -14,7 +15,12 @@ public sealed record AdoptablePetDto(
     string? Description,
     AdoptablePetStatus Status,
     string? PrimaryImageUrl,
-    IReadOnlyList<VaccinationRecordDto> Vaccinations);
+    IReadOnlyList<VaccinationRecordDto> Vaccinations,
+    IReadOnlyList<AdoptablePetPhotoDto> Photos);
+
+public sealed record AdoptablePetPhotoDto(Guid Id, Guid AdoptablePetId, string ImageUrl, DateTime CreatedAtUtc);
+
+public sealed record SetAdoptablePetPrimaryPhotoRequest(Guid PhotoId);
 
 public sealed record VaccinationRecordDto(
     Guid Id,
@@ -35,13 +41,35 @@ public sealed record AdoptionRequestDto(
     DateTime CreatedAtUtc,
     DateTime? ResolvedAtUtc);
 
-public sealed record UpsertShelterRequest(
+public sealed record ShelterDto(
+    Guid Id,
     string Name,
     string? Description,
     string? Phone,
     string? Address,
+    string? LogoUrl,
+    string? BannerUrl,
     double Latitude,
-    double Longitude);
+    double Longitude,
+    bool IsVerified);
+
+public sealed class UpsertShelterRequest
+{
+    [MaxLength(150)]
+    public string Name { get; init; } = string.Empty;
+    [MaxLength(1000)]
+    public string? Description { get; init; }
+    [MaxLength(30)]
+    public string? Phone { get; init; }
+    [MaxLength(300)]
+    public string? Address { get; init; }
+    [MaxLength(500)]
+    public string? LogoUrl { get; init; }
+    [MaxLength(500)]
+    public string? BannerUrl { get; init; }
+    public double Latitude { get; init; }
+    public double Longitude { get; init; }
+}
 
 public sealed record CreateAdoptablePetRequest(
     string Name,

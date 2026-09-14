@@ -8,6 +8,7 @@ using PetPals.Application.Abstractions.Adoptions;
 using PetPals.Application.Abstractions.Chat;
 using PetPals.Application.Abstractions.Marketplace;
 using PetPals.Application.Abstractions.Social;
+using PetPals.Application.Abstractions.Storage;
 using PetPals.Infrastructure.Authentication;
 using PetPals.Infrastructure.Appointments;
 using PetPals.Infrastructure.Adoptions;
@@ -17,6 +18,7 @@ using PetPals.Infrastructure.Identity;
 using PetPals.Infrastructure.Marketplace;
 using PetPals.Infrastructure.Persistence;
 using PetPals.Infrastructure.Social;
+using PetPals.Infrastructure.Storage;
 
 namespace PetPals.Infrastructure;
 
@@ -59,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IAdoptionService, AdoptionService>();
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<ISocialFeedService, SocialFeedService>();
+        services.AddScoped<IFileStorage, LocalFileStorage>();
         services.AddScoped<IMarketplaceService, MarketplaceService>();
 
         return services;

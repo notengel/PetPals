@@ -13,6 +13,18 @@ export function clearStoredToken() {
   localStorage.removeItem('petpals_token')
 }
 
+export async function apiUpload(path, token, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.errors?.join?.(', ') || data.title || 'Upload failed')
+  return data
+}
 export function getTokenRole(token) {
   if (!token) return null
 
@@ -60,10 +72,39 @@ export const authApi = {
     method: 'POST',
     body: JSON.stringify(body),
   }),
+  changeEmail: (token, newEmail) => apiRequest('/auth/email', {
+    method: 'PUT',
+    body: JSON.stringify({ newEmail }),
+    token,
+  }),
+  changePassword: (token, body) => apiRequest('/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    token,
+  }),
 }
 
 export const socialApi = {
   profile: (token) => apiRequest('/social/profile/me', { token }),
+  updateProfile: (token, body) => apiRequest('/social/profile/me', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    token,
+  }),
+  myPosts: (token) => apiRequest('/social/profile/me/posts?page=1&pageSize=50', { token }),
+  uploadAvatar: (token, file) => apiUpload('/social/profile/me/avatar', token, file),
+  uploadBanner: (token, file) => apiUpload('/social/profile/me/banner', token, file),
+  petPhotos: (token, petId) => apiRequest(`/social/pets/${petId}/photos`, { token }),
+  uploadPetPhoto: (token, petId, file) => apiUpload(`/social/pets/${petId}/photos`, token, file),
+  deletePetPhoto: (token, petId, photoId) => apiRequest(`/social/pets/${petId}/photos/${photoId}`, {
+    method: 'DELETE',
+    token,
+  }),
+  setPetPrimary: (token, petId, photoId) => apiRequest(`/social/pets/${petId}/primary`, {
+    method: 'PUT',
+    body: JSON.stringify({ photoId }),
+    token,
+  }),
   pets: (token) => apiRequest('/social/pets', { token }),
   createPet: (token, body) => apiRequest('/social/pets', {
     method: 'POST',
@@ -96,6 +137,31 @@ export const marketplaceApi = {
     body: JSON.stringify(body),
     token,
   }),
+  clinic: (token, clinicId) => apiRequest(`/marketplace/clinics/${clinicId}`, { token }),
+  clinicProfile: (token, clinicId) => apiRequest(`/marketplace/clinics/${clinicId}/profile`, { token }),
+  clinicPhotos: (token, clinicId) => apiRequest(`/marketplace/clinics/${clinicId}/photos`, { token }),
+  uploadClinicPhoto: (token, file) => apiUpload('/marketplace/clinics/me/photos', token, file),
+  deleteClinicPhoto: (token, photoId) => apiRequest(`/marketplace/clinics/me/photos/${photoId}`, {
+    method: 'DELETE',
+    token,
+  }),
+  setClinicPrimary: (token, photoId) => apiRequest('/marketplace/clinics/me/primary', {
+    method: 'PUT',
+    body: JSON.stringify({ photoId }),
+    token,
+  }),
+  clinicReviews: (token, clinicId) => apiRequest(`/marketplace/clinics/${clinicId}/reviews`, { token }),
+  saveClinicReview: (token, clinicId, body) => apiRequest(`/marketplace/clinics/${clinicId}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    token,
+  }),
+  deleteClinicReview: (token, reviewId) => apiRequest(`/marketplace/reviews/${reviewId}`, {
+    method: 'DELETE',
+    token,
+  }),
+  uploadClinicLogo: (token, file) => apiUpload('/marketplace/clinics/me/logo', token, file),
+  uploadClinicBanner: (token, file) => apiUpload('/marketplace/clinics/me/banner', token, file),
   products: (token, clinicId, category) => {
     const params = new URLSearchParams()
     if (clinicId) params.set('clinicId', clinicId)
@@ -132,6 +198,18 @@ export const appointmentsApi = {
 
 export const adoptionApi = {
   pets: (token) => apiRequest('/adoptions/pets', { token }),
+  pet: (token, petId) => apiRequest(`/adoptions/pets/${petId}`, { token }),
+  petPhotos: (token, petId) => apiRequest(`/adoptions/pets/${petId}/photos`, { token }),
+  uploadPetPhoto: (token, petId, file) => apiUpload(`/adoptions/pets/${petId}/photos`, token, file),
+  deletePetPhoto: (token, petId, photoId) => apiRequest(`/adoptions/pets/${petId}/photos/${photoId}`, {
+    method: 'DELETE',
+    token,
+  }),
+  setPetPrimary: (token, petId, photoId) => apiRequest(`/adoptions/pets/${petId}/primary`, {
+    method: 'PUT',
+    body: JSON.stringify({ photoId }),
+    token,
+  }),
   requests: (token) => apiRequest('/adoptions/requests/mine', { token }),
   shelterRequests: (token) => apiRequest('/adoptions/requests/shelter', { token }),
   request: (token, petId, applicantMessage) => apiRequest(`/adoptions/pets/${petId}/requests`, {
@@ -144,6 +222,14 @@ export const adoptionApi = {
     body: JSON.stringify(body),
     token,
   }),
+  myShelter: (token) => apiRequest('/adoptions/shelter/me', { token }),
+  saveShelter: (token, body) => apiRequest('/adoptions/shelter', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    token,
+  }),
+  uploadShelterLogo: (token, file) => apiUpload('/adoptions/shelter/me/logo', token, file),
+  uploadShelterBanner: (token, file) => apiUpload('/adoptions/shelter/me/banner', token, file),
 }
 
 export const chatApi = {

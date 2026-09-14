@@ -48,4 +48,22 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
             Role = User.FindFirstValue(ClaimTypes.Role)
         });
     }
+
+    [Authorize]
+    [HttpPut("email")]
+    public async Task<IActionResult> ChangeEmail(ChangeEmailRequest request, CancellationToken cancellationToken)
+    {
+        var (succeeded, error) = await authService.ChangeEmailAsync(CurrentUserId(), request.NewEmail, cancellationToken);
+        return succeeded ? NoContent() : BadRequest(new { errors = new[] { error } });
+    }
+
+    [Authorize]
+    [HttpPut("password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        var (succeeded, error) = await authService.ChangePasswordAsync(CurrentUserId(), request.CurrentPassword, request.NewPassword, cancellationToken);
+        return succeeded ? NoContent() : BadRequest(new { errors = new[] { error } });
+    }
+
+    private Guid CurrentUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }
