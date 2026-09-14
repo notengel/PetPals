@@ -29,6 +29,23 @@ function SidebarGlyph({ name }) {
   return icons[name] || icons.feed
 }
 
+function PetPicker({ pets, value, onChange }) {
+  return (
+    <div className="chip-picker" role="radiogroup" aria-label="Mascota de la publicación">
+      <label className="chip-option">
+        <input type="radio" name="post-pet" value="" checked={value === ''} onChange={(event) => onChange(event.target.value)} />
+        <span>Sin mascota</span>
+      </label>
+      {pets.map((pet) => (
+        <label className="chip-option" key={pet.id}>
+          <input type="radio" name="post-pet" value={pet.id} checked={value === pet.id} onChange={(event) => onChange(event.target.value)} />
+          <span>{pet.name}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
 function ProfileView({ profile, pets, posts, loading, comments, commentForms, postText, setPostText, selectedPet, setSelectedPet, petForm, setPetForm, createPost, createPet, toggleLike, toggleComments, addComment, setActiveView }) {
   const role = profile?.role || 'User'
   return (
@@ -54,10 +71,7 @@ function ProfileView({ profile, pets, posts, loading, comments, commentForms, po
               <div className="composer-head"><div className="avatar">{profile?.displayName?.[0] || 'P'}</div><div><strong>¿Qué está pasando?</strong><span>Comparte un momento de tu manada.</span></div></div>
               <textarea aria-label="Contenido de la publicación" value={postText} onChange={(event) => setPostText(event.target.value)} placeholder="Escribe algo bonito..." maxLength={2000} />
               <div className="composer-footer">
-                <select aria-label="Mascota de la publicación" value={selectedPet} onChange={(event) => setSelectedPet(event.target.value)}>
-                  <option value="">Sin mascota asociada</option>
-                  {pets.map((pet) => <option value={pet.id} key={pet.id}>{pet.name}</option>)}
-                </select>
+                <PetPicker pets={pets} value={selectedPet} onChange={setSelectedPet} />
                 <button className="button button-primary" type="submit">Publicar</button>
               </div>
             </form>
@@ -352,10 +366,7 @@ function App() {
             <div className="composer-head"><div className="avatar">{profile?.displayName?.[0] || 'P'}</div><div><strong>¿Qué está pasando?</strong><span>Comparte un momento de tu manada.</span></div></div>
             <textarea aria-label="Contenido de la publicación" value={postText} onChange={(event) => setPostText(event.target.value)} placeholder="Escribe algo bonito..." maxLength={2000} />
             <div className="composer-footer">
-              <select aria-label="Mascota de la publicación" value={selectedPet} onChange={(event) => setSelectedPet(event.target.value)}>
-                <option value="">Sin mascota asociada</option>
-                {pets.map((pet) => <option value={pet.id} key={pet.id}>{pet.name}</option>)}
-              </select>
+              <PetPicker pets={pets} value={selectedPet} onChange={setSelectedPet} />
               <button className="button button-primary" type="submit">Publicar</button>
             </div>
           </form>
@@ -829,7 +840,7 @@ function AuthScreen({ mode, setMode, form, setForm, onSubmit, loading, error }) 
         <div className="paw-note">La comunidad empieza con una historia.</div>
       </section>
       <section className="auth-panel">
-        <div className="auth-form-wrap">
+        <div className="auth-form-wrap" key={mode}>
           <div className="brand-lockup"><div className="brand-mark">P</div><span>PetPals</span></div>
           <p className="eyebrow">{mode === 'login' ? 'BIENVENIDO DE VUELTA' : 'ÚNETE A LA MANADA'}</p>
           <h1>{mode === 'login' ? 'Vuelve a tu comunidad.' : 'Crea tu espacio.'}</h1>
@@ -839,7 +850,7 @@ function AuthScreen({ mode, setMode, form, setForm, onSubmit, loading, error }) 
             {mode === 'register' && (
               <>
                 <label>Nombre visible<input required value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /></label>
-                <label>Tipo de cuenta<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="User">Dueño de mascota</option><option value="Clinic">Veterinaria</option><option value="Shelter">Refugio</option></select></label>
+                <fieldset className="role-picker"><legend>Tipo de cuenta</legend><div className="role-options">{[{ value: 'User', title: 'Dueño', sub: 'Comparte tu manada' }, { value: 'Clinic', title: 'Veterinaria', sub: 'Ofrece servicios' }, { value: 'Shelter', title: 'Refugio', sub: 'Publica adopciones' }].map((option) => <label className="role-option" key={option.value}><input type="radio" name="role" value={option.value} checked={form.role === option.value} onChange={(event) => setForm({ ...form, role: event.target.value })} /><strong>{option.title}</strong><small>{option.sub}</small></label>)}</div></fieldset>
               </>
             )}
             <label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
