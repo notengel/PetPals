@@ -5,6 +5,112 @@ import { adoptionApi, API_URL, appointmentsApi, authApi, chatApi, clearStoredTok
 import './App.css'
 import 'leaflet/dist/leaflet.css'
 
+const navigationItems = [
+  { id: 'feed', label: 'Feed', eyebrow: 'PETPALS / SOCIAL', title: 'Un buen día para compartirlo.', subtitle: 'Momentos reales de personas que viven la misma manada.', icon: 'feed' },
+  { id: 'marketplace', label: 'Tienda', eyebrow: 'PETPALS / MARKETPLACE', title: 'Cuida su mundo.', subtitle: 'Productos seleccionados para acompañar cada etapa.', icon: 'store' },
+  { id: 'appointments', label: 'Citas', eyebrow: 'PETPALS / CITAS', title: 'Salud sin complicaciones.', subtitle: 'Organiza sus próximas visitas en un solo lugar.', icon: 'calendar' },
+  { id: 'adoptions', label: 'Adopciones', eyebrow: 'PETPALS / ADOPCIONES', title: 'Una nueva historia empieza aquí.', subtitle: 'Conecta con animales que buscan un hogar.', icon: 'heart' },
+  { id: 'maps', label: 'Mapa', eyebrow: 'PETPALS / MAPA', title: 'Todo cerca de tu manada.', subtitle: 'Encuentra veterinarias y servicios próximos a ti.', icon: 'map' },
+  { id: 'chat', label: 'Mensajes', eyebrow: 'PETPALS / CHAT', title: 'Habla con tu comunidad.', subtitle: 'Conversaciones privadas, sencillas y seguras.', icon: 'chat' },
+]
+
+const profileNavigationItem = { id: 'profile', label: 'Perfil', eyebrow: 'PETPALS / PERFIL', title: 'Tu espacio, a tu manera.', subtitle: 'Una vista rápida de tu vida en PetPals.', icon: 'user' }
+
+function SidebarGlyph({ name }) {
+  const icons = {
+    feed: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M4 6h16M4 12h16M4 18h16" /></svg>,
+    store: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+    calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
+    heart: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>,
+    map: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></svg>,
+    chat: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
+    user: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+  }
+return icons[name] || icons.feed
+}
+
+function ProfileView({ profile, pets, posts, loading, comments, commentForms, postText, setPostText, selectedPet, setSelectedPet, petForm, setPetForm, createPost, createPet, toggleLike, toggleComments, addComment, setActiveView }) {
+  const role = profile?.role || 'User'
+  return (
+    <div className="profile-view fade-in-up">
+      <div className="profile-header scale-in">
+        <div className="avatar profile-avatar">{profile?.displayName?.[0] || 'P'}</div>
+        <div className="profile-meta">
+          <h1>{profile?.displayName || 'Tu perfil'}</h1>
+          <span className="role-badge">{role === 'Clinic' ? 'Veterinaria' : role === 'Shelter' ? 'Refugio' : 'Dueño de mascota'}</span>
+          {profile?.bio && <p className="bio">{profile.bio}</p>}
+          <div className="profile-stats">
+            <div className="profile-stat"><strong>{posts.length}</strong><span>Publicaciones</span></div>
+            <div className="profile-stat"><strong>{pets.length}</strong><span>Mascotas</span></div>
+            <div className="profile-stat"><strong>{posts.reduce((a, p) => a + (p.likesCount || 0), 0)}</strong><span>Me gusta</span></div>
+          </div>
+        </div>
+      </div>
+      <div className="profile-grid">
+        <div className="profile-main">
+          <div className="magic-card-wrapper" onMouseMove={(event) => { const rect = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty('--mx', `${event.clientX - rect.left}px`); event.currentTarget.style.setProperty('--my', `${event.clientY - rect.top}px`) }}>
+            <div className="magic-spotlight" style={{ '--mx': '50%', '--my': '50%' }} />
+            <form className="composer-card stagger-1" onSubmit={createPost}>
+              <div className="composer-head"><div className="avatar">{profile?.displayName?.[0] || 'P'}</div><div><strong>¿Qué está pasando?</strong><span>Comparte un momento de tu manada.</span></div></div>
+              <textarea aria-label="Contenido de la publicación" value={postText} onChange={(event) => setPostText(event.target.value)} placeholder="Escribe algo bonito..." maxLength={2000} />
+              <div className="composer-footer">
+                <select aria-label="Mascota de la publicación" value={selectedPet} onChange={(event) => setSelectedPet(event.target.value)}>
+                  <option value="">Sin mascota asociada</option>
+                  {pets.map((pet) => <option value={pet.id} key={pet.id}>{pet.name}</option>)}
+                </select>
+                <button className="button button-primary" type="submit">Publicar</button>
+              </div>
+            </form>
+          </div>
+          <section className="section-card stagger-2">
+            <div className="section-card-head"><h2>Tus mascotas</h2><span className="count-badge">{pets.length}</span></div>
+            <div className="section-card-body">
+              {pets.map((pet) => (<div className="pet-card-row" key={pet.id}><span className="pet-dot" style={{ background: '#fff0e8', color: 'var(--coral)' }}>{pet.name[0]}</span><div className="pet-info"><strong>{pet.name}</strong><small>{pet.species}</small></div></div>))}
+              {!pets.length && <p className="muted" style={{ textAlign: 'center', padding: '20px' }}>Aún no tienes mascotas. Agrega una desde el formulario de abajo.</p>}
+            </div>
+          </section>
+          <section className="section-card stagger-3">
+            <div className="section-card-head"><h2>Feed reciente</h2></div>
+            <div className="section-card-body" style={{ paddingTop: 0 }}>
+              {loading && <div className="card loading-card">Cargando tu feed...</div>}
+              {!loading && !posts.length && <div className="card empty-card"><span className="empty-icon">+</span><h2>Tu feed comienza aquí</h2><p>Publica el primer momento de tu mascota.</p></div>}
+              <div className="post-list">
+                {posts.map((post) => (
+                  <article className="post-card" key={post.id}>
+                    <div className="post-head"><div className="avatar">{post.authorDisplayName?.[0] || 'P'}</div><div className="post-meta"><strong>{post.authorDisplayName}</strong><span>{new Date(post.createdAtUtc).toLocaleString()}</span></div><button className="more-button" type="button" aria-label="Más opciones">...</button></div>
+                    <p className="post-content">{post.content}</p>
+                    {post.petName && <div className="pet-tag">Con {post.petName}</div>}
+                    <div className="post-actions"><button className={post.isLiked ? 'action-button liked' : 'action-button'} type="button" onClick={() => toggleLike(post)}>♡ {post.likesCount} Me gusta</button><button className="action-button" type="button" onClick={() => toggleComments(post.id)}>◌ {post.commentsCount} Comentarios</button></div>
+                    {comments[post.id] && <div className="comments"><div className="comment-list">{comments[post.id].map((comment) => <div className="comment" key={comment.id}><span className="avatar avatar-small">{comment.userDisplayName?.[0] || 'P'}</span><p><strong>{comment.userDisplayName}</strong>{comment.content}</p></div>)}</div><form className="comment-form" onSubmit={(event) => addComment(event, post.id)}><input aria-label="Nuevo comentario" placeholder="Escribe un comentario..." value={commentForms[post.id] || ''} onChange={(event) => setCommentForms({ ...commentForms, [post.id]: event.target.value })} /><button type="submit">Enviar</button></form></div>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+        <aside className="profile-sidebar">
+          <div className="profile-sidebar-card stagger-4">
+            <h3>Añadir mascota</h3>
+            <form className="compact-form" onSubmit={createPet} style={{ marginTop: 0 }}>
+              <input aria-label="Nombre de mascota" placeholder="Nombre" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} />
+              <input aria-label="Especie de mascota" placeholder="Especie" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })} />
+              <button className="button button-secondary button-wide" type="submit">+ Añadir mascota</button>
+            </form>
+          </div>
+          <div className="profile-sidebar-card stagger-5">
+            <h3>Acciones rápidas</h3>
+            <button className="quick-action" type="button" onClick={() => setActiveView('marketplace')}><SidebarGlyph name="store" />Explorar tienda</button>
+            <button className="quick-action" type="button" onClick={() => setActiveView('appointments')}><SidebarGlyph name="calendar" />Pedir cita</button>
+            <button className="quick-action" type="button" onClick={() => setActiveView('adoptions')}><SidebarGlyph name="heart" />Ver adopciones</button>
+            <button className="quick-action" type="button" onClick={() => setActiveView('maps')}><SidebarGlyph name="map" />Buscar en mapa</button>
+            <button className="quick-action" type="button" onClick={() => setActiveView('chat')}><SidebarGlyph name="chat" />Mensajes</button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [token, setToken] = useState(getStoredToken)
   const [profile, setProfile] = useState(null)
@@ -51,6 +157,10 @@ function App() {
       const response = await (authMode === 'register' ? authApi.register(body) : authApi.login(body))
       storeToken(response.accessToken)
       setToken(response.accessToken)
+      if (authMode === 'register') {
+        setAuthMode('login')
+        setAuthForm({ email: '', password: '', displayName: '', role: 'User' })
+      }
     } catch (requestError) {
       handleError(requestError)
     } finally {
@@ -138,9 +248,16 @@ function App() {
     setPosts([])
   }
 
-  function handleError(requestError) {
+function handleError(requestError) {
     setError(requestError.message || 'Something went wrong')
   }
+
+  const role = getTokenRole(token)
+  const activeNav = activeView === 'profile'
+    ? profileNavigationItem
+    : navigationItems.find((item) => item.id === activeView) || navigationItems[0]
+  const displayName = profile?.displayName || 'Mi perfil'
+  const displayInitial = displayName[0] || 'P'
 
   if (!token) {
     return <AuthScreen mode={authMode} setMode={setAuthMode} form={authForm} setForm={setAuthForm} onSubmit={handleAuth} loading={loading} error={error} />
@@ -148,34 +265,49 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-mark">P</div>
-        <div>
-          <p className="eyebrow">PETPALS / SOCIAL</p>
-          <h1>Un buen día para compartirlo.</h1>
+      <aside className="app-sidebar">
+        <div className="sidebar-glow" aria-hidden="true" />
+        <div className="sidebar-brand">
+          <div className="brand-mark">P</div>
+          <div><strong>PetPals</strong><span>Tu manada digital</span></div>
         </div>
-        <div className="topbar-actions">
-          <nav className="top-nav" aria-label="Main navigation">
-            <button className={activeView === 'feed' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('feed')}>Feed</button>
-            <button className={activeView === 'marketplace' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('marketplace')}>Tienda</button>
-            <button className={activeView === 'appointments' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('appointments')}>Citas</button>
-            <button className={activeView === 'adoptions' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('adoptions')}>Adopciones</button>
-            <button className={activeView === 'maps' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('maps')}>Mapa</button>
-            <button className={activeView === 'chat' ? 'nav-button active' : 'nav-button'} type="button" onClick={() => setActiveView('chat')}>Chat</button>
-          </nav>
-          <span className="user-pill">{profile?.displayName || 'Mi perfil'}</span>
-          <button className="button button-ghost" type="button" onClick={logout}>Salir</button>
+        <div className="sidebar-welcome"><span>ESPACIO PERSONAL</span><strong>Hola, {displayName.split(' ')[0]}</strong></div>
+        <nav className="sidebar-nav" aria-label="Navegación principal">
+          <p className="sidebar-label">Explora PetPals</p>
+          {navigationItems.map((item) => <button className={activeView === item.id ? 'sidebar-nav-button active' : 'sidebar-nav-button'} aria-current={activeView === item.id ? 'page' : undefined} type="button" key={item.id} onClick={() => setActiveView(item.id)}><SidebarGlyph name={item.icon} /><span>{item.label}</span>{activeView === item.id && <i aria-hidden="true" />}</button>)}
+        </nav>
+        <div className="sidebar-quote"><span>“</span><p>Las mejores historias tienen patas.</p></div>
+        <div className="sidebar-bottom">
+          <button className={activeView === 'profile' ? 'sidebar-user-button active' : 'sidebar-user-button'} type="button" onClick={() => setActiveView('profile')}>
+            <span className="avatar sidebar-avatar">{displayInitial}</span>
+            <span className="sidebar-user-copy"><strong>{displayName}</strong><small>{role === 'Clinic' ? 'Veterinaria' : role === 'Shelter' ? 'Refugio' : 'Dueño de mascota'}</small></span>
+            <span className="sidebar-user-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button className="sidebar-logout" type="button" onClick={logout}><span aria-hidden="true">↪</span>Salir</button>
         </div>
-      </header>
+      </aside>
 
-      {error && <div className="alert">{error}</div>}
+      <div className="app-main">
+        <header className="topbar">
+          <div className="topbar-copy">
+            <p className="eyebrow">{activeNav.eyebrow}</p>
+            <div className="topbar-title-row"><h1 className="gradient-title">{activeNav.title}</h1><span className="live-badge"><i /> EN VIVO</span></div>
+            <p className="topbar-subtitle">{activeNav.subtitle}</p>
+          </div>
+          <div className="topbar-actions"><span className="community-status"><i /> Comunidad conectada</span><button className="mobile-profile-button" type="button" aria-label="Abrir mi perfil" onClick={() => setActiveView('profile')}><span className="avatar">{displayInitial}</span></button></div>
+        </header>
 
-      {activeView === 'marketplace'
-        ? <MarketplaceView token={token} role={getTokenRole(token)} onError={handleError} />
+        {error && <div className="alert">{error}</div>}
+
+        <div className="page-content view-enter" key={activeView}>
+      {activeView === 'profile'
+        ? <ProfileView profile={profile} pets={pets} posts={posts} loading={loading} comments={comments} commentForms={commentForms} postText={postText} setPostText={setPostText} selectedPet={selectedPet} setSelectedPet={setSelectedPet} petForm={petForm} setPetForm={setPetForm} createPost={createPost} createPet={createPet} toggleLike={toggleLike} toggleComments={toggleComments} addComment={addComment} setActiveView={setActiveView} />
+        : activeView === 'marketplace'
+          ? <MarketplaceView token={token} role={role} onError={handleError} />
         : activeView === 'appointments'
-          ? getTokenRole(token) === 'Clinic' ? <ClinicAppointmentsView token={token} onError={handleError} /> : <AppointmentsView token={token} pets={pets} onError={handleError} />
+          ? role === 'Clinic' ? <ClinicAppointmentsView token={token} onError={handleError} /> : <AppointmentsView token={token} pets={pets} onError={handleError} />
         : activeView === 'adoptions'
-          ? <AdoptionsView token={token} role={getTokenRole(token)} onError={handleError} />
+          ? <AdoptionsView token={token} role={role} onError={handleError} />
         : activeView === 'maps'
           ? <MapsView token={token} onError={handleError} />
         : activeView === 'chat'
@@ -242,7 +374,9 @@ function App() {
             ))}
           </div>
         </section>
-        </div>}
+         </div>}
+        </div>
+      </div>
     </main>
   )
 }
@@ -312,6 +446,7 @@ function MapsView({ token, onError }) {
   const [clinics, setClinics] = useState([])
   const [location, setLocation] = useState(null)
   const [loading, setLoading] = useState(true)
+  const defaultCenter = [40.4168, -3.7038] // Madrid as sensible default
 
   useEffect(() => {
     marketplaceApi.clinics(token)
@@ -320,20 +455,49 @@ function MapsView({ token, onError }) {
       .finally(() => setLoading(false))
     navigator.geolocation?.getCurrentPosition(
       (position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => {},
+      { timeout: 8000, maximumAge: 300000 }
     )
   }, [onError, token])
 
   const sortedClinics = [...clinics].sort((left, right) => distanceFrom(location, left) - distanceFrom(location, right))
   const mapClinic = sortedClinics[0]
-  const mapCenter = mapClinic ? [mapClinic.latitude, mapClinic.longitude] : location ? [location.latitude, location.longitude] : [0, 0]
+  const rawCenter = mapClinic ? [mapClinic.latitude, mapClinic.longitude] : location ? [location.latitude, location.longitude] : defaultCenter
+  const mapCenter = (Array.isArray(rawCenter) && rawCenter.every(c => Number.isFinite(c))) ? rawCenter : defaultCenter
+  const zoomLevel = (mapClinic || location) ? 13 : 6
 
   return (
     <section className="maps-layout">
       <div className="maps-main">
-        <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MAPA</p><h2>Veterinarias cerca de ti.</h2><p className="marketplace-intro">Activa tu ubicación para ordenar los resultados por cercanía.</p></div><button className="button button-secondary" type="button" onClick={() => navigator.geolocation?.getCurrentPosition((position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }))}>Usar mi ubicación</button></div>
-        <div className="map-card card"><MapContainer center={mapCenter} zoom={mapClinic || location ? 13 : 2} scrollWheelZoom><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><MapCenter center={mapCenter} />{location && <CircleMarker center={[location.latitude, location.longitude]} pathOptions={{ color: '#c56b45' }}><Popup>Tu ubicación aproximada</Popup></CircleMarker>}{clinics.map((clinic) => <CircleMarker center={[clinic.latitude, clinic.longitude]} pathOptions={{ color: '#315c4b' }} key={clinic.id}><Popup><strong>{clinic.name}</strong><br />{clinic.address || 'Dirección no disponible'}</Popup></CircleMarker>)}</MapContainer></div>
+        <div className="marketplace-heading">
+          <div>
+            <p className="eyebrow">PETPALS / MAPA</p>
+            <h2>Veterinarias cerca de ti.</h2>
+            <p className="marketplace-intro">Activa tu ubicación para ordenar los resultados por cercanía.</p>
+          </div>
+          <button className="button button-secondary" type="button" onClick={() => navigator.geolocation?.getCurrentPosition((position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }))}>Usar mi ubicación</button>
+        </div>
+        <div className="map-card">
+          {loading && <div className="map-loading"><i /><span>Cargando mapa...</span></div>}
+          <MapContainer center={mapCenter} zoom={zoomLevel} scrollWheelZoom>
+            <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <MapCenter center={mapCenter} />
+            {location && <CircleMarker center={[location.latitude, location.longitude]} pathOptions={{ color: '#c56b45', weight: 3 }}><Popup>Tu ubicación aproximada</Popup></CircleMarker>}
+            {clinics.map((clinic) => {
+              const lat = Number(clinic.latitude)
+              const lng = Number(clinic.longitude)
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+              return <CircleMarker key={clinic.id} center={[lat, lng]} pathOptions={{ color: '#315c4b', weight: 3 }}><Popup><strong>{clinic.name}</strong><br />{clinic.address || 'Dirección no disponible'}</Popup></CircleMarker>
+            })}
+          </MapContainer>
+        </div>
       </div>
-      <aside className="clinic-list card"><div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>{loading && <p className="muted">Cargando ubicaciones...</p>}{!loading && !clinics.length && <p className="muted">Aún no hay veterinarias registradas.</p>}{sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.openstreetmap.org/?mlat=${clinic.latitude}&mlon=${clinic.longitude}#map=17/${clinic.latitude}/${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span>{formatDistance(distanceFrom(location, clinic))}</span></a>)}</aside>
+      <aside className="clinic-list">
+        <div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>
+        {loading ? <div className="map-loading" style={{position: 'static', padding: '40px'}}><i /><span>Cargando ubicaciones...</span></div>
+        : !clinics.length ? <div className="map-empty"><strong>Sin veterinarias aún</strong><span>Cuando una clínica se registre aparecerá aquí.</span></div>
+        : sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.openstreetmap.org/?mlat=${clinic.latitude}&mlon=${clinic.longitude}#map=17/${clinic.latitude}/${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span className="distance">{formatDistance(distanceFrom(location, clinic))}</span></a>)}
+      </aside>
     </section>
   )
 }
@@ -648,9 +812,60 @@ function AuthScreen({ mode, setMode, form, setForm, onSubmit, loading, error }) 
   const [showPassword, setShowPassword] = useState(false)
 
   return (
-    <main className="auth-shell">
-      <section className="auth-visual"><p className="eyebrow">PETPALS / SOCIAL FEED</p><div className="auth-animal-wall" aria-hidden="true"><figure className="animal-tile animal-tile-one"><img src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=500&q=82" alt="" /></figure><figure className="animal-tile animal-tile-two"><img src="https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=500&q=82" alt="" /></figure><figure className="animal-tile animal-tile-three"><img src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=500&q=82" alt="" /></figure><figure className="animal-tile animal-tile-four"><img src="https://images.unsplash.com/photo-1573865526739-10659fec78a5?auto=format&fit=crop&w=500&q=82" alt="" /></figure><figure className="animal-tile animal-tile-five"><img src="https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?auto=format&fit=crop&w=500&q=82" alt="" /></figure></div><div className="auth-slogan"><span>Pequeños momentos.</span><strong>Grandes historias.</strong></div><p>Un lugar para compartir la vida que construyes con tus mascotas.</p><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="paw-note">La comunidad empieza con una historia.</div></section>
-       <section className="auth-panel"><div className="auth-form-wrap"><div className="brand-lockup"><div className="brand-mark">P</div><span>PetPals</span></div><p className="eyebrow">{mode === 'login' ? 'BIENVENIDO DE VUELTA' : 'ÚNETE A LA MANADA'}</p><h1>{mode === 'login' ? 'Vuelve a tu comunidad.' : 'Crea tu espacio.'}</h1><p className="auth-intro">{mode === 'login' ? 'Continúa compartiendo esos momentos que importan.' : 'Comparte la vida de tus mascotas con personas que la entienden.'}</p>{error && <div className="alert">{error}</div>}<form className="auth-form" onSubmit={onSubmit}>{mode === 'register' && <><label>Nombre visible<input required value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /></label><label>Tipo de cuenta<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="User">Dueño de mascota</option><option value="Clinic">Veterinaria</option><option value="Shelter">Refugio</option></select></label></>}<label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label>Contraseña<div className="password-field"><input required type={showPassword ? 'text' : 'password'} minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><button className="password-toggle" type="button" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l18 18" /><path d="M10.58 10.58a2 2 0 0 0 2.83 2.83" /><path d="M9.88 5.09A10.94 10.94 0 0 1 12 4.5c5 0 8.5 5.5 8.5 5.5a15.7 15.7 0 0 1-3.07 3.73M6.61 6.61C4.18 8.15 2.5 10.5 2.5 10.5S6 16 12 16c1.15 0 2.22-.2 3.2-.52" /></svg> : <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 12s3.5-5.5 9.5-5.5S21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.5" /></svg>}</button></div></label><button className="button button-primary button-wide" disabled={loading} type="submit">{loading ? 'Procesando...' : mode === 'login' ? 'Entrar a PetPals' : 'Crear cuenta'}</button></form><button className="switch-auth" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? '¿Aún no tienes cuenta? Regístrate' : 'Ya tengo una cuenta'}</button></div></section>
+    <main className={mode === 'register' ? 'auth-shell register-mode' : 'auth-shell'}>
+      <section className="auth-visual">
+        <p className="eyebrow">PETPALS / SOCIAL FEED</p>
+        <div className="auth-animal-wall" aria-hidden="true">
+          <figure className="animal-tile animal-tile-one"><img src="https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=500&q=82" alt="" /></figure>
+          <figure className="animal-tile animal-tile-two"><img src="https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=500&q=82" alt="" /></figure>
+          <figure className="animal-tile animal-tile-three"><img src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=500&q=82" alt="" /></figure>
+          <figure className="animal-tile animal-tile-four"><img src="https://images.unsplash.com/photo-1573865526739-10659fec78a5?auto=format&fit=crop&w=500&q=82" alt="" /></figure>
+          <figure className="animal-tile animal-tile-five"><img src="https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?auto=format&fit=crop&w=500&q=82" alt="" /></figure>
+        </div>
+        <div className="auth-slogan"><span>Pequeños momentos.</span><strong>Grandes historias.</strong></div>
+        <p>Un lugar para compartir la vida que construyes con tus mascotas.</p>
+        <div className="orbit orbit-one" /><div className="orbit orbit-two" />
+        <div className="paw-note">La comunidad empieza con una historia.</div>
+      </section>
+      <section className="auth-panel">
+        <div className="auth-form-wrap">
+          <div className="brand-lockup"><div className="brand-mark">P</div><span>PetPals</span></div>
+          <p className="eyebrow">{mode === 'login' ? 'BIENVENIDO DE VUELTA' : 'ÚNETE A LA MANADA'}</p>
+          <h1>{mode === 'login' ? 'Vuelve a tu comunidad.' : 'Crea tu espacio.'}</h1>
+          <p className="auth-intro">{mode === 'login' ? 'Continúa compartiendo esos momentos que importan.' : 'Comparte la vida de tus mascotas con personas que la entienden.'}</p>
+          {error && <div className="alert">{error}</div>}
+          <form className="auth-form" onSubmit={onSubmit}>
+            {mode === 'register' && (
+              <>
+                <label>Nombre visible<input required value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /></label>
+                <label>Tipo de cuenta<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="User">Dueño de mascota</option><option value="Clinic">Veterinaria</option><option value="Shelter">Refugio</option></select></label>
+              </>
+            )}
+            <label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
+            <label>Contraseña
+              <div className="password-field">
+                <input required type={showPassword ? 'text' : 'password'} minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+                <button className="password-toggle" type="button" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? (
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 3l18 18" /><path d="M10.58 10.58a2 2 0 0 0 2.83 2.83" />
+                      <path d="M9.88 5.09A10.94 10.94 0 0 1 12 4.5c5 0 8.5 5.5 8.5 5.5a15.7 15.7 0 0 1-3.07 3.73M6.61 6.61C4.18 8.15 2.5 10.5 2.5 10.5S6 16 12 16c1.15 0 2.22-.2 3.2-.52" />
+                    </svg>
+                  ) : (
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M2.5 12s3.5-5.5 9.5-5.5S21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.5" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </label>
+            <button className="button button-primary button-wide" disabled={loading} type="submit">{loading ? 'Procesando...' : mode === 'login' ? 'Entrar a PetPals' : 'Crear cuenta'}</button>
+          </form>
+          <button className="switch-auth" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+            {mode === 'login' ? '¿Aún no tienes cuenta? Regístrate' : 'Ya tengo una cuenta'}
+          </button>
+        </div>
+      </section>
     </main>
   )
 }
