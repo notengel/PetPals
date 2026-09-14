@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { HubConnectionBuilder } from '@microsoft/signalr'
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet'
 import { adoptionApi, API_URL, appointmentsApi, authApi, chatApi, clearStoredToken, getStoredToken, getTokenRole, marketplaceApi, socialApi, storeToken } from './api'
 import './App.css'
+import 'leaflet/dist/leaflet.css'
 
 function App() {
   const [token, setToken] = useState(getStoredToken)
@@ -323,20 +325,23 @@ function MapsView({ token, onError }) {
 
   const sortedClinics = [...clinics].sort((left, right) => distanceFrom(location, left) - distanceFrom(location, right))
   const mapClinic = sortedClinics[0]
-  const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-  const mapUrl = mapClinic
-    ? `https://www.google.com/maps/search/?api=1&query=${mapClinic.latitude},${mapClinic.longitude}`
-    : 'https://www.google.com/maps'
+  const mapCenter = mapClinic ? [mapClinic.latitude, mapClinic.longitude] : location ? [location.latitude, location.longitude] : [0, 0]
 
   return (
     <section className="maps-layout">
       <div className="maps-main">
         <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MAPA</p><h2>Veterinarias cerca de ti.</h2><p className="marketplace-intro">Activa tu ubicación para ordenar los resultados por cercanía.</p></div><button className="button button-secondary" type="button" onClick={() => navigator.geolocation?.getCurrentPosition((position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }))}>Usar mi ubicación</button></div>
-        <div className="map-card card">{mapsKey && mapClinic ? <iframe title="Mapa de veterinarias" src={`https://www.google.com/maps/embed/v1/place?key=${mapsKey}&q=${mapClinic.latitude},${mapClinic.longitude}`} loading="lazy" /> : <div className="map-placeholder"><span>GOOGLE MAPS</span><strong>{mapClinic ? mapClinic.name : 'Selecciona una veterinaria'}</strong><p>{mapsKey ? 'No hay veterinarias para mostrar.' : 'Configura VITE_GOOGLE_MAPS_API_KEY para mostrar el mapa integrado.'}</p><a className="button button-primary" href={mapUrl} target="_blank" rel="noreferrer">Abrir en Google Maps</a></div>}</div>
+        <div className="map-card card"><MapContainer center={mapCenter} zoom={mapClinic || location ? 13 : 2} scrollWheelZoom><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><MapCenter center={mapCenter} />{location && <CircleMarker center={[location.latitude, location.longitude]} pathOptions={{ color: '#c56b45' }}><Popup>Tu ubicación aproximada</Popup></CircleMarker>}{clinics.map((clinic) => <CircleMarker center={[clinic.latitude, clinic.longitude]} pathOptions={{ color: '#315c4b' }} key={clinic.id}><Popup><strong>{clinic.name}</strong><br />{clinic.address || 'Dirección no disponible'}</Popup></CircleMarker>)}</MapContainer></div>
       </div>
-      <aside className="clinic-list card"><div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>{loading && <p className="muted">Cargando ubicaciones...</p>}{!loading && !clinics.length && <p className="muted">Aún no hay veterinarias registradas.</p>}{sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.google.com/maps/search/?api=1&query=${clinic.latitude},${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span>{formatDistance(distanceFrom(location, clinic))}</span></a>)}</aside>
+      <aside className="clinic-list card"><div className="section-heading"><div><p className="eyebrow">UBICACIONES</p><h2>Veterinarias</h2></div><span className="count-badge">{clinics.length}</span></div>{loading && <p className="muted">Cargando ubicaciones...</p>}{!loading && !clinics.length && <p className="muted">Aún no hay veterinarias registradas.</p>}{sortedClinics.map((clinic) => <a className="clinic-row" href={`https://www.openstreetmap.org/?mlat=${clinic.latitude}&mlon=${clinic.longitude}#map=17/${clinic.latitude}/${clinic.longitude}`} target="_blank" rel="noreferrer" key={clinic.id}><div><strong>{clinic.name}</strong><small>{clinic.address || 'Dirección no disponible'}</small></div><span>{formatDistance(distanceFrom(location, clinic))}</span></a>)}</aside>
     </section>
   )
+}
+
+function MapCenter({ center }) {
+  const map = useMap()
+  useEffect(() => map.setView(center), [center, map])
+  return null
 }
 
 function distanceFrom(location, clinic) {
@@ -607,10 +612,17 @@ function MarketplaceView({ token, role, onError }) {
   async function saveClinic(event) {
     event.preventDefault()
     try {
+      let coordinates = { latitude: Number(clinicForm.latitude), longitude: Number(clinicForm.longitude) }
+      if (clinicForm.address.trim()) {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(clinicForm.address)}`, {
+          headers: { Accept: 'application/json' },
+        })
+        const [result] = await response.json()
+        if (result) coordinates = { latitude: Number(result.lat), longitude: Number(result.lon) }
+      }
       const savedClinic = await marketplaceApi.saveClinic(token, {
         ...clinicForm,
-        latitude: Number(clinicForm.latitude),
-        longitude: Number(clinicForm.longitude),
+        ...coordinates,
       })
       setClinic(savedClinic)
     } catch (requestError) {

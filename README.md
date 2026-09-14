@@ -64,7 +64,7 @@ Centralizar en un solo lugar:
    - Sin pasarela de pagos en esta versión: solo catálogo y carrito (sin checkout de pago real).
 
 5. **Geolocalización**
-   - Mapa con veterinarias cercanas según la ubicación del usuario, usando **Google Maps API**.
+   - Mapa con veterinarias cercanas según la ubicación del usuario, usando **OpenStreetMap + Leaflet**.
 
 ## 🏗️ Arquitectura técnica
 
@@ -72,7 +72,7 @@ Centralizar en un solo lugar:
 - **Frontend:** aplicación separada (SPA — React/Angular, a definir en detalle durante el desarrollo)
 - **Base de datos:** SQL Server
 - **ORM:** Entity Framework Core
-- **Mapas:** Google Maps API
+- **Mapas:** OpenStreetMap + Leaflet; Nominatim para geocoding
 - **Chat en tiempo real:** SignalR
 - **Patrón de arquitectura:** Clean Architecture (capas: Domain, Application, Infrastructure, API)
 
@@ -82,7 +82,7 @@ Centralizar en un solo lugar:
 PetPals.sln
  ├── PetPals.Domain          # Entidades y lógica de negocio central
  ├── PetPals.Application     # Casos de uso, DTOs, interfaces
- ├── PetPals.Infrastructure  # EF Core, repositorios, servicios externos (Google Maps)
+ ├── PetPals.Infrastructure  # EF Core, repositorios y servicios externos
  └── PetPals.API             # Controllers, configuración, middlewares
 ```
 
@@ -121,7 +121,7 @@ Cada tipo de cuenta tiene su propio login y su propio panel:
 ### Usuario normal
 - **Home / Feed:** publicaciones de otros usuarios y sus mascotas.
 - **Marketplace:** comprar productos a las veterinarias.
-- **Veterinarias cercanas:** mapa (Google Maps) con las veterinarias cerca de su ubicación.
+ - **Veterinarias cercanas:** mapa (OpenStreetMap) con las veterinarias cerca de su ubicación.
 - **Perfil / Mis mascotas.**
 
 ### Veterinaria

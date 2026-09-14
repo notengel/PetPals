@@ -152,7 +152,7 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
 .publish-form { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 .maps-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; max-width: 1180px; margin: 0 auto; }
 .map-card { min-height: 480px; overflow: hidden; background: radial-gradient(circle at 25% 20%, #dcebd0 0 2px, transparent 3px), radial-gradient(circle at 70% 65%, #dcebd0 0 2px, transparent 3px), #f4f0e5; background-size: 42px 42px, 58px 58px, auto; }
-.map-card iframe { display: block; width: 100%; min-height: 480px; border: 0; }
+.map-card .leaflet-container { min-height: 480px; width: 100%; }
 .map-placeholder { display: grid; place-items: center; align-content: center; gap: 12px; min-height: 480px; padding: 32px; text-align: center; }
 .map-placeholder span { color: var(--accent); font: 11px 'DM Mono', monospace; letter-spacing: .12em; }
 .map-placeholder strong { color: var(--green); font-size: clamp(28px, 4vw, 56px); letter-spacing: -.06em; }
