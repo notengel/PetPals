@@ -26,7 +26,7 @@ function SidebarGlyph({ name }) {
     chat: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
     user: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
   }
-return icons[name] || icons.feed
+  return icons[name] || icons.feed
 }
 
 function ProfileView({ profile, pets, posts, loading, comments, commentForms, postText, setPostText, selectedPet, setSelectedPet, petForm, setPetForm, createPost, createPet, toggleLike, toggleComments, addComment, setActiveView }) {
@@ -248,7 +248,7 @@ function App() {
     setPosts([])
   }
 
-function handleError(requestError) {
+  function handleError(requestError) {
     setError(requestError.message || 'Something went wrong')
   }
 
@@ -374,7 +374,7 @@ function handleError(requestError) {
             ))}
           </div>
         </section>
-         </div>}
+        </div>}
         </div>
       </div>
     </main>
