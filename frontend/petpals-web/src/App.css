@@ -415,6 +415,7 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
 .topbar-actions { display: flex; align-items: center; gap: 16px; }
 .community-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .community-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.menu-button { display: none; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--green); font-size: 18px; }
 .mobile-profile-button { display: none; padding: 8px; background: transparent; border: 0; border-radius: 10px; }
 .mobile-profile-button .avatar { width: 36px; height: 36px; font-size: 16px; }
 
@@ -547,8 +548,9 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
 .auth-shell .auth-visual,
 .auth-shell .auth-panel { transition: transform .55s cubic-bezier(.25, .1, .25, 1), opacity .4s cubic-bezier(.25, .1, .25, 1); }
 
-.auth-shell.register-mode .auth-visual { transform: translateX(-100%); opacity: 0; pointer-events: none; }
-.auth-shell.register-mode .auth-panel { transform: translateX(-50%); width: 100%; max-width: 480px; margin-left: auto; background: transparent; }
+.auth-shell.register-mode { grid-template-columns: .9fr 1.1fr; }
+.auth-shell.register-mode .auth-visual { order: 2; }
+.auth-shell.register-mode .auth-panel { order: 1; background: transparent; }
 .auth-shell.register-mode .auth-form-wrap { max-width: 420px; background: #fff; border-radius: 24px; padding: 40px 32px; box-shadow: 0 30px 80px rgba(24, 61, 45, .15); animation: panelSlideIn .55s cubic-bezier(.25, .1, .25, 1); }
 @keyframes panelSlideIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
 .auth-shell.register-mode .brand-lockup { margin-bottom: 32px; }
@@ -559,6 +561,7 @@ input:focus, textarea:focus, select:focus { border-color: #94b99d; box-shadow: 0
   .app-sidebar { position: fixed; left: -280px; width: 280px; max-width: 85vw; height: 100svh; z-index: 200; box-shadow: 0 0 0 100vmax rgba(0,0,0,.3); transition: left .3s cubic-bezier(.2, .8, .2, 1); }
   .app-sidebar.open { left: 0; }
   .app-main { margin-left: 0; }
+  .menu-button { display: grid; }
   .mobile-profile-button { display: flex !important; }
   .topbar { padding: 16px 20px; }
   .page-content { padding: 20px; }

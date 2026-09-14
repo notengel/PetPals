@@ -126,6 +126,7 @@ function App() {
   const [loading, setLoading] = useState(Boolean(token))
   const [error, setError] = useState('')
   const [activeView, setActiveView] = useState('feed')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -265,7 +266,7 @@ function App() {
 
   return (
     <main className="app-shell">
-      <aside className="app-sidebar">
+      <aside className={sidebarOpen ? 'app-sidebar open' : 'app-sidebar'}>
         <div className="sidebar-glow" aria-hidden="true" />
         <div className="sidebar-brand">
           <div className="brand-mark">P</div>
@@ -274,11 +275,11 @@ function App() {
         <div className="sidebar-welcome"><span>ESPACIO PERSONAL</span><strong>Hola, {displayName.split(' ')[0]}</strong></div>
         <nav className="sidebar-nav" aria-label="Navegación principal">
           <p className="sidebar-label">Explora PetPals</p>
-          {navigationItems.map((item) => <button className={activeView === item.id ? 'sidebar-nav-button active' : 'sidebar-nav-button'} aria-current={activeView === item.id ? 'page' : undefined} type="button" key={item.id} onClick={() => setActiveView(item.id)}><SidebarGlyph name={item.icon} /><span>{item.label}</span>{activeView === item.id && <i aria-hidden="true" />}</button>)}
+          {navigationItems.map((item) => <button className={activeView === item.id ? 'sidebar-nav-button active' : 'sidebar-nav-button'} aria-current={activeView === item.id ? 'page' : undefined} type="button" key={item.id} onClick={() => { setActiveView(item.id); setSidebarOpen(false) }}><SidebarGlyph name={item.icon} /><span>{item.label}</span>{activeView === item.id && <i aria-hidden="true" />}</button>)}
         </nav>
         <div className="sidebar-quote"><span>“</span><p>Las mejores historias tienen patas.</p></div>
         <div className="sidebar-bottom">
-          <button className={activeView === 'profile' ? 'sidebar-user-button active' : 'sidebar-user-button'} type="button" onClick={() => setActiveView('profile')}>
+          <button className={activeView === 'profile' ? 'sidebar-user-button active' : 'sidebar-user-button'} type="button" onClick={() => { setActiveView('profile'); setSidebarOpen(false) }}>
             <span className="avatar sidebar-avatar">{displayInitial}</span>
             <span className="sidebar-user-copy"><strong>{displayName}</strong><small>{role === 'Clinic' ? 'Veterinaria' : role === 'Shelter' ? 'Refugio' : 'Dueño de mascota'}</small></span>
             <span className="sidebar-user-arrow" aria-hidden="true">↗</span>
@@ -294,7 +295,7 @@ function App() {
             <div className="topbar-title-row"><h1 className="gradient-title">{activeNav.title}</h1><span className="live-badge"><i /> EN VIVO</span></div>
             <p className="topbar-subtitle">{activeNav.subtitle}</p>
           </div>
-          <div className="topbar-actions"><span className="community-status"><i /> Comunidad conectada</span><button className="mobile-profile-button" type="button" aria-label="Abrir mi perfil" onClick={() => setActiveView('profile')}><span className="avatar">{displayInitial}</span></button></div>
+          <div className="topbar-actions"><span className="community-status"><i /> Comunidad conectada</span><button className="menu-button" type="button" aria-label="Abrir menú" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><span aria-hidden="true">☰</span></button><button className="mobile-profile-button" type="button" aria-label="Abrir mi perfil" onClick={() => setActiveView('profile')}><span className="avatar">{displayInitial}</span></button></div>
         </header>
 
         {error && <div className="alert">{error}</div>}
