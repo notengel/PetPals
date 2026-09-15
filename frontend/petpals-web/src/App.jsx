@@ -384,7 +384,29 @@ function App() {
     setProfile(null)
     setPets([])
     setPosts([])
+    setComments({})
+    setCommentForms({})
+    setSelectedPet('')
+    setPetForm({ name: '', species: '' })
+    setPostText('')
+    setActiveView('feed')
   }
+
+  // Escuchar logout en otra pestaña / 401 de API
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'petpals_token' && !e.newValue) {
+        logout()
+      }
+    }
+    const onAuthExpired = () => logout()
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('petpals:auth-expired', onAuthExpired)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('petpals:auth-expired', onAuthExpired)
+    }
+  }, [])
 
   function handleError(requestError) {
     setError(requestError.message || 'Something went wrong')
@@ -447,7 +469,7 @@ function App() {
         : activeView === 'adoptions'
           ? <AdoptionsView token={token} role={role} onError={handleError} />
         : activeView === 'maps'
-          ? <MapsView token={token} onError={handleError} />
+          ? (role === 'User' || role === 'Clinic') ? <MapsView token={token} onError={handleError} /> : <div className="card"><strong>Acceso denegado</strong><p>El mapa está disponible solo para usuarios y veterinarias.</p></div>
         : activeView === 'chat'
           ? <ChatView token={token} onError={handleError} />
         : <div className="content-grid">
@@ -580,11 +602,24 @@ function ChatView({ token, onError }) {
 function ClinicPublicProfile({ token, clinicId, onClose, onError }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
 
   useEffect(() => {
-    marketplaceApi.clinicProfile(token, clinicId).then(setProfile).catch(onError).finally(() => setLoading(false))
+    setError(null)
+    setLoading(true)
+    marketplaceApi.clinicProfile(token, clinicId)
+      .then((data) => {
+        console.log('[ClinicPublicProfile] response:', data)
+        setProfile(data)
+      })
+      .catch((err) => {
+        console.error('[ClinicPublicProfile] error:', err)
+        setError(err.message || 'Error al cargar perfil')
+        onError(err)
+      })
+      .finally(() => setLoading(false))
   }, [clinicId, onError, token])
 
   async function saveReview(event) {
@@ -592,12 +627,18 @@ function ClinicPublicProfile({ token, clinicId, onClose, onError }) {
     try {
       await marketplaceApi.saveClinicReview(token, clinicId, { rating: Number(rating), comment })
       setComment('')
-      setProfile(await marketplaceApi.clinicProfile(token, clinicId))
-    } catch (requestError) { onError(requestError) }
+      const fresh = await marketplaceApi.clinicProfile(token, clinicId)
+      console.log('[ClinicPublicProfile] refresh:', fresh)
+      setProfile(fresh)
+    } catch (requestError) { 
+      console.error('[ClinicPublicProfile] saveReview error:', requestError)
+      onError(requestError) 
+    }
   }
 
   if (loading) return <div className="card loading-card">Cargando perfil...</div>
-  if (!profile) return null
+  if (error) return <div className="card alert"><strong>Error:</strong> {error} <button className="button button-ghost" onClick={onClose}>Cerrar</button></div>
+  if (!profile) return <div className="card alert">Sin datos de perfil <button className="button button-ghost" onClick={onClose}>Cerrar</button></div>
   const { clinic, services, schedules, products, photos, clinicPhotos, adoptablePets, avgRating, reviewCount, reviews } = profile
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -689,9 +730,9 @@ function MapsView({ token, onError }) {
           </div>
           <button className="button button-secondary" type="button" onClick={() => navigator.geolocation?.getCurrentPosition((position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }))}>Usar mi ubicación</button>
         </div>
-        <div className="map-card">
+        <div className="map-card" style={{ height: 420 }}>
           {loading && <div className="map-loading"><i /><span>Cargando mapa...</span></div>}
-          <MapContainer center={mapCenter} zoom={zoomLevel} scrollWheelZoom>
+          <MapContainer center={mapCenter} zoom={zoomLevel} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <MapCenter center={mapCenter} />
             {location && <CircleMarker center={[location.latitude, location.longitude]} pathOptions={{ color: '#c56b45', weight: 3 }}><Popup>Tu ubicación aproximada</Popup></CircleMarker>}
@@ -717,7 +758,9 @@ function MapsView({ token, onError }) {
 
 function MapCenter({ center }) {
   const map = useMap()
-  useEffect(() => map.setView(center), [center, map])
+  useEffect(() => {
+    map.setView(center)
+  }, [center, map])
   return null
 }
 
@@ -1098,29 +1141,52 @@ function MarketplaceView({ token, role, onError }) {
   const [orders, setOrders] = useState([])
   const [clinic, setClinic] = useState(null)
   const [clinicForm, setClinicForm] = useState({ name: '', description: '', phone: '', address: '', latitude: 0, longitude: 0 })
-  const [category, setCategory] = useState('')
   const [loading, setLoading] = useState(true)
   const [productForm, setProductForm] = useState({ name: '', description: '', category: 0, price: 0, stock: 0 })
+  // Filtros
+  const [filters, setFilters] = useState({
+    category: '',
+    minPrice: '',
+    maxPrice: '',
+    verifiedOnly: false,
+    search: '',
+    sortBy: 'name',
+    inStockOnly: false
+  })
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+
+  function loadProducts() {
+    setLoading(true)
+    marketplaceApi.products(token, filters)
+      .then((data) => { setProducts(data); setLoading(false) })
+      .catch((err) => { onError(err); setLoading(false) })
+  }
 
   useEffect(() => {
-    const requests = [marketplaceApi.products(token, null, category)]
-    if (role !== 'Clinic') requests.push(marketplaceApi.cart(token))
-    if (role === 'Clinic') requests.push(marketplaceApi.clinicOrders(token))
-    if (role === 'Clinic') requests.push(marketplaceApi.myClinic(token).catch(() => null))
+    let mounted = true
+    loadProducts()
 
-    Promise.all(requests)
-      .then(([nextProducts, nextSecondary, nextClinic]) => {
-        setProducts(nextProducts)
-        if (role === 'Clinic') {
-          setOrders(nextSecondary || [])
-          setClinic(nextClinic)
-          if (nextClinic) setClinicForm(nextClinic)
+    if (role !== 'Clinic') {
+      marketplaceApi.cart(token)
+        .then((data) => { if (mounted) setCart(data) })
+        .catch(onError)
+    } else {
+      Promise.allSettled([
+        marketplaceApi.clinicOrders(token),
+        marketplaceApi.myClinic(token)
+      ]).then(([ordersRes, clinicRes]) => {
+        if (!mounted) return
+        if (ordersRes.status === 'fulfilled') setOrders(ordersRes.value)
+        else onError(ordersRes.reason)
+        if (clinicRes.status === 'fulfilled' && clinicRes.value) {
+          setClinic(clinicRes.value)
+          setClinicForm(clinicRes.value)
         }
-        else setCart(nextSecondary || null)
-      })
-      .catch(onError)
-      .finally(() => setLoading(false))
-  }, [category, onError, role, token])
+      }).catch(onError)
+    }
+
+    return () => { mounted = false }
+  }, [filters, onError, role, token])
 
   async function addProduct(productId) {
     try {
@@ -1134,7 +1200,7 @@ function MarketplaceView({ token, role, onError }) {
     try {
       await marketplaceApi.checkout(token)
       setCart(await marketplaceApi.cart(token))
-      setProducts(await marketplaceApi.products(token, null, category))
+      loadProducts()
     } catch (requestError) {
       onError(requestError)
     }
@@ -1197,7 +1263,73 @@ function MarketplaceView({ token, role, onError }) {
   return (
     <section className="marketplace-layout">
       <div className="marketplace-main">
-        <div className="marketplace-heading"><div><p className="eyebrow">PETPALS / MARKETPLACE</p><h2>Cuida su mundo.</h2><p className="marketplace-intro">Productos seleccionados por veterinarias de la comunidad.</p></div><select aria-label="Filtrar por categoría" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Todas las categorías</option><option value="0">Alimento</option><option value="1">Vacunas</option><option value="2">Medicinas</option><option value="3">Accesorios</option><option value="4">Higiene</option><option value="5">Otros</option></select></div>
+        <div className="marketplace-heading">
+          <div>
+            <p className="eyebrow">PETPALS / MARKETPLACE</p>
+            <h2>Cuida su mundo.</h2>
+            <p className="marketplace-intro">Productos seleccionados por veterinarias de la comunidad.</p>
+          </div>
+          <button className="button button-secondary" type="button" onClick={() => setFilterPanelOpen(!filterPanelOpen)}>
+            {filterPanelOpen ? '✕ Cerrar filtros' : '🔍 Filtros'}
+          </button>
+        </div>
+        {filterPanelOpen && (
+          <aside className="filter-sidebar card" style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Filtros</h3>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div>
+                <label className="filter-label">Categoría</label>
+                <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
+                  <option value="">Todas</option>
+                  <option value="0">Alimento</option>
+                  <option value="1">Vacunas</option>
+                  <option value="2">Medicinas</option>
+                  <option value="3">Accesorios</option>
+                  <option value="4">Higiene</option>
+                  <option value="5">Otros</option>
+                </select>
+              </div>
+              <div className="filter-row">
+                <div>
+                  <label className="filter-label">Precio mín</label>
+                  <input type="number" step="0.01" min="0" placeholder="0" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} />
+                </div>
+                <div>
+                  <label className="filter-label">Precio máx</label>
+                  <input type="number" step="0.01" min="0" placeholder="∞" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="filter-label">Buscar</label>
+                <input type="text" placeholder="Nombre, descripción, clínica..." value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
+              </div>
+              <div>
+                <label className="filter-label">Ordenar</label>
+                <select value={filters.sortBy} onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}>
+                  <option value="name">Nombre (A-Z)</option>
+                  <option value="price_asc">Precio: menor a mayor</option>
+                  <option value="price_desc">Precio: mayor a menor</option>
+                  <option value="newest">Más recientes</option>
+                  <option value="popular">Más stock</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
+                <label className="checkbox-inline">
+                  <input type="checkbox" checked={filters.verifiedOnly} onChange={(e) => setFilters({ ...filters, verifiedOnly: e.target.checked })} />
+                  <span>Solo verificadas</span>
+                </label>
+                <label className="checkbox-inline">
+                  <input type="checkbox" checked={filters.inStockOnly} onChange={(e) => setFilters({ ...filters, inStockOnly: e.target.checked })} />
+                  <span>Con stock</span>
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="button button-secondary" type="button" onClick={() => setFilters({ category: '', minPrice: '', maxPrice: '', verifiedOnly: false, search: '', sortBy: 'name', inStockOnly: false })}>Limpiar</button>
+                <button className="button button-primary" type="button" onClick={loadProducts}>Aplicar</button>
+              </div>
+            </div>
+          </aside>
+        )}
         {role === 'Clinic' && <form className="clinic-profile-form card" onSubmit={saveClinic}>
           <strong>{clinic ? 'Perfil de veterinaria' : 'Configura tu veterinaria'}</strong>
           {clinic?.bannerUrl && <img src={profileImg(clinic.bannerUrl)} alt="Portada" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8 }} />}

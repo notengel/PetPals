@@ -109,9 +109,16 @@ public sealed class MarketplaceController(IMarketplaceService marketplaceService
     public async Task<ActionResult<IReadOnlyList<ProductDto>>> GetProducts(
         [FromQuery] Guid? clinicId,
         [FromQuery] ProductCategory? category,
-        CancellationToken cancellationToken)
+        [FromQuery] decimal? minPrice,
+        [FromQuery] decimal? maxPrice,
+        [FromQuery] bool? verifiedOnly,
+        [FromQuery] string? search,
+        [FromQuery] string? sortBy,
+        [FromQuery] bool? inStockOnly,
+        CancellationToken cancellationToken = default)
     {
-        return Ok(await marketplaceService.GetProductsAsync(clinicId, category, cancellationToken));
+        return Ok(await marketplaceService.GetProductsAsync(
+            clinicId, category, minPrice, maxPrice, verifiedOnly, search, sortBy, inStockOnly, cancellationToken));
     }
 
     [HttpPost("products")]

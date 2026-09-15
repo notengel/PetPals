@@ -18,7 +18,16 @@ public interface IMarketplaceService
     Task<ClinicDto?> GetMyClinicAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<ClinicDto> SaveMyClinicAsync(Guid userId, UpsertClinicRequest request, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<ProductDto>> GetProductsAsync(Guid? clinicId, ProductCategory? category, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ProductDto>> GetProductsAsync(
+        Guid? clinicId,
+        ProductCategory? category,
+        decimal? minPrice,
+        decimal? maxPrice,
+        bool? verifiedOnly,
+        string? search,
+        string? sortBy,
+        bool? inStockOnly,
+        CancellationToken cancellationToken = default);
     Task<ProductDto?> CreateProductAsync(Guid userId, ProductRequest request, CancellationToken cancellationToken = default);
     Task<ProductDto?> UpdateProductAsync(Guid userId, Guid productId, ProductRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteProductAsync(Guid userId, Guid productId, CancellationToken cancellationToken = default);

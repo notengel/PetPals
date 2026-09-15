@@ -75,6 +75,12 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
     public async Task<IReadOnlyList<ProductDto>> GetProductsAsync(
         Guid? clinicId,
         ProductCategory? category,
+        decimal? minPrice,
+        decimal? maxPrice,
+        bool? verifiedOnly,
+        string? search,
+        string? sortBy,
+        bool? inStockOnly,
         CancellationToken cancellationToken = default)
     {
         var query =
@@ -93,8 +99,46 @@ public sealed class MarketplaceService(ApplicationDbContext db) : IMarketplaceSe
             query = query.Where(item => item.product.Category == category);
         }
 
+        if (minPrice is not null)
+        {
+            query = query.Where(item => item.product.Price >= minPrice.Value);
+        }
+
+        if (maxPrice is not null)
+        {
+            query = query.Where(item => item.product.Price <= maxPrice.Value);
+        }
+
+        if (verifiedOnly == true)
+        {
+            query = query.Where(item => item.clinic.IsVerified);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(item =>
+                item.product.Name.ToLower().Contains(term) ||
+                (item.product.Description != null && item.product.Description.ToLower().Contains(term)) ||
+                item.clinic.Name.ToLower().Contains(term));
+        }
+
+        if (inStockOnly == true)
+        {
+            query = query.Where(item => item.product.Stock > 0);
+        }
+
+        // Ordenamiento
+        query = sortBy?.ToLower() switch
+        {
+            "price_asc" => query.OrderBy(item => item.product.Price),
+            "price_desc" => query.OrderByDescending(item => item.product.Price),
+            "newest" => query.OrderByDescending(item => item.product.CreatedAtUtc),
+            "popular" => query.OrderByDescending(item => item.product.Stock), // proxy: más stock = más popular
+            _ => query.OrderBy(item => item.product.Name)
+        };
+
         return await query
-            .OrderBy(item => item.product.Name)
             .Select(item => new ProductDto(
                 item.product.Id,
                 item.product.ClinicId,

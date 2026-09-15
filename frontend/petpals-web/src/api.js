@@ -54,6 +54,12 @@ export async function apiRequest(path, options = {}) {
     return null
   }
 
+  if (response.status === 401) {
+    // Disparar evento para forzar logout global
+    window.dispatchEvent(new CustomEvent('petpals:auth-expired'))
+    throw new Error('Sesión expirada')
+  }
+
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
     const message = data.errors?.join?.(', ') || data.title || 'Request failed'
@@ -162,10 +168,17 @@ export const marketplaceApi = {
   }),
   uploadClinicLogo: (token, file) => apiUpload('/marketplace/clinics/me/logo', token, file),
   uploadClinicBanner: (token, file) => apiUpload('/marketplace/clinics/me/banner', token, file),
-  products: (token, clinicId, category) => {
+  products: (token, filters = {}) => {
+    const { clinicId, category, minPrice, maxPrice, verifiedOnly, search, sortBy, inStockOnly } = filters
     const params = new URLSearchParams()
     if (clinicId) params.set('clinicId', clinicId)
-    if (category !== '') params.set('category', category)
+    if (category !== '' && category !== null && category !== undefined) params.set('category', category)
+    if (minPrice !== null && minPrice !== undefined) params.set('minPrice', minPrice)
+    if (maxPrice !== null && maxPrice !== undefined) params.set('maxPrice', maxPrice)
+    if (verifiedOnly === true) params.set('verifiedOnly', 'true')
+    if (search) params.set('search', search)
+    if (sortBy) params.set('sortBy', sortBy)
+    if (inStockOnly === true) params.set('inStockOnly', 'true')
     const query = params.toString()
     return apiRequest(`/marketplace/products${query ? `?${query}` : ''}`, { token })
   },
@@ -179,6 +192,7 @@ export const marketplaceApi = {
     method: 'POST',
     token,
   }),
+  clinicOrders: (token) => apiRequest('/marketplace/clinic/orders', { token }),
 }
 
 export const appointmentsApi = {
@@ -250,7 +264,6 @@ export const chatApi = {
     body: JSON.stringify(body),
     token,
   }),
-  clinicOrders: (token) => apiRequest('/marketplace/clinic/orders', { token }),
   updateOrderStatus: (token, orderId, status) => apiRequest(`/marketplace/clinic/orders/${orderId}/status`, {
     method: 'PUT',
     body: JSON.stringify({ status }),
